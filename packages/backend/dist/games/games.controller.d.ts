@@ -1,4 +1,5 @@
-import { GamesService, StoredGame } from './games.service';
+import { ApplyMoveDto } from './apply-move.dto';
+import { GameAnalysis, GamesService, StoredGame } from './games.service';
 /**
  * HTTP endpoints for managing game sessions.
  *
@@ -10,8 +11,26 @@ import { GamesService, StoredGame } from './games.service';
 export declare class GamesController {
     private readonly gamesService;
     constructor(gamesService: GamesService);
-    /**
-     * POST /games — create a fresh game and return it.
-     */
+    /** POST /games — create a fresh game and return it. */
     create(): StoredGame;
+    /** GET /games/:id — fetch an existing game by id. */
+    findById(id: string): StoredGame;
+    /**
+     * POST /games/:id/moves — apply a human move and return the updated game.
+     * Body must match `{ move: [m, c] }` — validated by the global ValidationPipe.
+     */
+    applyMove(id: string, body: ApplyMoveDto): StoredGame;
+    /**
+     * POST /games/:id/ai-move — run MCTS and apply the AI's chosen move.
+     * Optional ?sims=N lets you trade off speed vs strength without code changes.
+     */
+    aiMove(id: string, simsParam?: string): Promise<StoredGame>;
+    /**
+     * GET /games/:id/analysis — return the cached MCTS analysis from the AI's
+     * last move, camelCased and with a derived winProbability field.
+     *
+     * Returns 400 if the AI has not moved yet in this game.
+     * Returns 404 if the game does not exist.
+     */
+    getAnalysis(id: string): GameAnalysis;
 }

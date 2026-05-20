@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GamesModule = void 0;
 const common_1 = require("@nestjs/common");
+const inference_module_1 = require("../inference/inference.module");
 const games_controller_1 = require("./games.controller");
 const games_service_1 = require("./games.service");
 /**
@@ -15,12 +16,16 @@ const games_service_1 = require("./games.service");
  * surface), the service (in-memory storage and game logic delegation),
  * and any future helpers. Imported by `AppModule` to bring `/games/*`
  * routes into the application.
+ *
+ * `InferenceModule` is imported here so that `InferenceService` is
+ * injectable inside this module's providers (specifically `GamesService`).
  */
 let GamesModule = class GamesModule {
 };
 exports.GamesModule = GamesModule;
 exports.GamesModule = GamesModule = __decorate([
     (0, common_1.Module)({
+        imports: [inference_module_1.InferenceModule],
         controllers: [games_controller_1.GamesController],
         providers: [games_service_1.GamesService],
     })
