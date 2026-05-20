@@ -1,0 +1,62 @@
+/* ─── Design tokens ──────────────────────────────────────────────────── */
+
+:root {
+  /* Surfaces */
+  --bg:           #0a0a0a;
+  --bg-surface:   #111111;
+  --bg-elevated:  #181818;
+
+  /* Borders */
+  --border:       #1e1e1e;
+  --border-mid:   #2e2e2e;
+  --border-strong:#444444;
+
+  /* Text */
+  --text:         #e0e0e0;
+  --text-muted:   #5a5a5a;
+  --text-dim:     #2e2e2e;
+
+  /* Players */
+  --x:            #e8c547;   /* warm gold  — X */
+  --o:            #5b9cf6;   /* cool blue  — O */
+  --draw:         #4caf50;   /* light green - Draw */
+
+  --font: 'IBM Plex Mono', monospace;
+}
+
+/* ─── Reset ──────────────────────────────────────────────────────────── */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  height: 100%;
+}
+
+button {
+  font-family: var(--font);
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+button:focus-visible {
+  outline: 1px solid var(--text);
+  outline-offset: 2px;
+}

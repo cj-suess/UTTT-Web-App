@@ -1,0 +1,96 @@
+/* ─── Outer board ────────────────────────────────────────────────────────────
+   The gap + background trick: the board background colour "bleeds through"
+   the gaps between micro boards, visually becoming the thick macro grid lines.
+   No actual border elements needed.                                           */
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 6px;
+  background: var(--border-strong);
+  padding: 3px;
+  aspect-ratio: 1 / 1;
+  width: min(100%, 560px);
+  transition: opacity 0.2s;
+}
+
+.boardDisabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* ─── Micro board ────────────────────────────────────────────────────────────
+   Same gap trick at a smaller scale: the micro background bleeds through the
+   1px gaps to form the thin inner grid lines.                                */
+
+.micro {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  position: relative;
+  transition: opacity 0.15s;
+}
+
+.microHighlighted {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 1px;
+  z-index: 1;
+}
+
+.microDimmed {
+  opacity: 0.3;
+}
+
+/* ─── Cell ───────────────────────────────────────────────────────────────── */
+
+.cell {
+  background: var(--bg-elevated);
+  border: none;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  padding: 0;
+  transition: background 0.08s;
+}
+
+.cellLegal {
+  cursor: pointer;
+}
+
+.cellLegal:hover {
+  background: var(--bg-surface);
+}
+
+/* ─── Macro win / draw overlay ───────────────────────────────────────────── */
+
+.macroOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.macroX    { background: rgba(232, 197, 71, 0.10); }
+.macroO    { background: rgba(91,  156, 246, 0.10); }
+.macroDraw { background: rgba(76, 175, 80, 0.08); }
+
+/* ─── Symbols ────────────────────────────────────────────────────────────── */
+
+.symbolSmall {
+  width: 54%;
+  height: 54%;
+}
+
+.symbolLarge {
+  width: 72%;
+  height: 72%;
+  opacity: 0.85;
+}

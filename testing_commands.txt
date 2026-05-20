@@ -6,8 +6,6 @@ uvicorn main:app --reload --port 8000
 
 
 
-
-
 # Terminal 2 (build shared if changes were made)
 
 pnpm --filter @uttt/shared build
@@ -17,6 +15,12 @@ pnpm --filter @uttt/shared build
 # Terminal 3 (NestJS backend)
 
 pnpm --filter @uttt/backend dev
+
+
+
+# Terminal 4 (React frontend)
+
+pnpm --filter @uttt/frontend dev
 
 
 
