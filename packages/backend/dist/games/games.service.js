@@ -28,11 +28,12 @@ let GamesService = class GamesService {
         this.inferenceService = inferenceService;
     }
     /** Create a fresh game and return it. */
-    create() {
+    create(playerName) {
         const id = (0, node_crypto_1.randomUUID)();
         const game = {
             id,
             state: (0, shared_1.initialState)(),
+            playerName: playerName,
             createdAt: new Date(),
             lastAnalysis: null,
         };

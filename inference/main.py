@@ -24,7 +24,7 @@ from game_utils import MCTS, UTTTNet, UTTTState
 # Config
 # ---------------------------------------------------------------------------
 DEVICE = os.environ.get("DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
-MODEL_PATH = os.environ.get("MODEL_PATH", "models/playable-2.pth")
+MODEL_PATH = os.environ.get("MODEL_PATH", "models/playable-4.pth")
 CHANNELS = int(os.environ.get("CHANNELS", "128"))
 NUM_RES_BLOCKS = int(os.environ.get("NUM_RES_BLOCKS", "10"))
 

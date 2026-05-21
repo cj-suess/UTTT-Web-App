@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApplyMoveDto } from './apply-move.dto';
 import { GameAnalysis, GamesService, StoredGame } from './games.service';
+import { CreateGameDto } from './create-game.dto';
 
 /**
  * HTTP endpoints for managing game sessions.
@@ -16,8 +17,8 @@ export class GamesController {
 
   /** POST /games — create a fresh game and return it. */
   @Post()
-  create(): StoredGame {
-    return this.gamesService.create();
+  create(@Body() body: CreateGameDto): StoredGame {
+    return this.gamesService.create(body.playerName);
   }
 
   /** GET /games/:id — fetch an existing game by id. */

@@ -35,6 +35,7 @@ export interface GameAnalysis {
 export interface GameResponse {
   id: string;
   state: GameState;
+  playerName: string;
   createdAt: string;
   // lastAnalysis exists on the backend but is snake_case (internal format).
   // Always use getAnalysis() for typed, camelCase analysis data.
@@ -59,12 +60,15 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 // ─── Endpoints ───────────────────────────────────────────────────────────────
 
-const AI_SIMS = 400;
+const AI_SIMS = 1000;
 
 export const api = {
   /** POST /games — create a new game. */
-  createGame: () =>
-    request<GameResponse>('/games', { method: 'POST' }),
+  createGame: (playerName: string) =>
+    request<GameResponse>('/games', { 
+      method: 'POST',
+      body: JSON.stringify({ playerName })
+     }),
 
   /** GET /games/:id — fetch the current game state. */
   getGame: (id: string) =>

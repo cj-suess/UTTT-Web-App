@@ -24,7 +24,7 @@
   font-size: 28px;
   font-weight: 700;
   letter-spacing: 0.25em;
-  color: var(--text);
+  color: var(--text-bright);
 }
 
 .subtitle {
@@ -47,7 +47,7 @@
 .placeholder {
   font-size: 10px;
   letter-spacing: 0.25em;
-  color: var(--border-strong);
+  color: var(--text-bright);
 }
 
 /* ─── Status bar ─────────────────────────────────────────────────────── */
@@ -63,7 +63,7 @@
 
 .statusText {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-bright);
   letter-spacing: 0.06em;
 }
 
@@ -85,4 +85,33 @@
 .btn:active {
   background: var(--border-strong);
   color: var(--text);
+}
+
+/* ─── Username prompt ─────────────────────────────────────────────────────── */
+
+.namePrompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.nameInput {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-mid);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  padding: 8px 14px;
+  width: 260px;
+  outline: none;
+}
+
+.nameInput:focus {
+  border-color: var(--border-strong);
+}
+
+.nameInput::placeholder {
+  color: var(--text-muted);
 }

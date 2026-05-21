@@ -16,6 +16,7 @@ exports.GamesController = void 0;
 const common_1 = require("@nestjs/common");
 const apply_move_dto_1 = require("./apply-move.dto");
 const games_service_1 = require("./games.service");
+const create_game_dto_1 = require("./create-game.dto");
 /**
  * HTTP endpoints for managing game sessions.
  *
@@ -30,8 +31,8 @@ let GamesController = class GamesController {
         this.gamesService = gamesService;
     }
     /** POST /games — create a fresh game and return it. */
-    create() {
-        return this.gamesService.create();
+    create(body) {
+        return this.gamesService.create(body.playerName);
     }
     /** GET /games/:id — fetch an existing game by id. */
     findById(id) {
@@ -66,8 +67,9 @@ let GamesController = class GamesController {
 exports.GamesController = GamesController;
 __decorate([
     (0, common_1.Post)(),
+    __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [create_game_dto_1.CreateGameDto]),
     __metadata("design:returntype", Object)
 ], GamesController.prototype, "create", null);
 __decorate([

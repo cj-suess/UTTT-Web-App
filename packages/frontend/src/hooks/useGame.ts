@@ -51,10 +51,10 @@ export function useGame() {
   // ─── Actions ───────────────────────────────────────────────────────────────
 
   /** Create a fresh game and reset all state. */
-  async function createGame() {
+  async function createGame(playerName: string) {
     begin();
     try {
-      const game = await api.createGame();
+      const game = await api.createGame(playerName);
       setState({ game, analysis: null, loading: false, error: null });
     } catch (e) {
       fail(e);

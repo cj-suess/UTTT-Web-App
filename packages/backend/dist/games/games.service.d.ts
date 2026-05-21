@@ -10,6 +10,7 @@ import { InferenceMoveResponse, InferenceService } from '../inference/inference.
 export interface StoredGame {
     id: string;
     state: GameState;
+    playerName: string;
     createdAt: Date;
     lastAnalysis: InferenceMoveResponse | null;
 }
@@ -46,7 +47,7 @@ export declare class GamesService {
     private readonly games;
     constructor(inferenceService: InferenceService);
     /** Create a fresh game and return it. */
-    create(): StoredGame;
+    create(playerName: string): StoredGame;
     /** Look up an existing game by id. Throws 404 if not found. */
     findById(id: string): StoredGame;
     /**

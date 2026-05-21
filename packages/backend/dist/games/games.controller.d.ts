@@ -1,5 +1,6 @@
 import { ApplyMoveDto } from './apply-move.dto';
 import { GameAnalysis, GamesService, StoredGame } from './games.service';
+import { CreateGameDto } from './create-game.dto';
 /**
  * HTTP endpoints for managing game sessions.
  *
@@ -12,7 +13,7 @@ export declare class GamesController {
     private readonly gamesService;
     constructor(gamesService: GamesService);
     /** POST /games — create a fresh game and return it. */
-    create(): StoredGame;
+    create(body: CreateGameDto): StoredGame;
     /** GET /games/:id — fetch an existing game by id. */
     findById(id: string): StoredGame;
     /**

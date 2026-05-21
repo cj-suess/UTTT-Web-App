@@ -32,6 +32,7 @@ import {
 export interface StoredGame {
   id: string;
   state: GameState;
+  playerName: string;
   createdAt: Date;
   lastAnalysis: InferenceMoveResponse | null;
 }
@@ -77,11 +78,12 @@ export class GamesService {
   constructor(private readonly inferenceService: InferenceService) {}
 
   /** Create a fresh game and return it. */
-  create(): StoredGame {
+  create(playerName: string): StoredGame {
     const id = randomUUID();
     const game: StoredGame = {
       id,
       state: initialState(),
+      playerName: playerName,
       createdAt: new Date(),
       lastAnalysis: null,
     };
