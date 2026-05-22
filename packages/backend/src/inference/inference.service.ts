@@ -1,6 +1,7 @@
 import {
   Injectable,
   InternalServerErrorException,
+  Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { GameState } from '@uttt/shared';
@@ -33,6 +34,7 @@ export interface InferenceMoveResponse {
 
 @Injectable()
 export class InferenceService {
+  private readonly logger = new Logger(InferenceService.name);
   /** Base URL of the Python inference service. Override via env var. */
   private readonly baseUrl =
     process.env['INFERENCE_URL'] ?? 'http://localhost:8000';
@@ -61,11 +63,15 @@ export class InferenceService {
 
     let response: Response;
     try {
+      const start = Date.now()
       response = await fetch(`${this.baseUrl}/move`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
+      const elapsed = Date.now() - start
+      this.logger.log(`Inference call completed in ${elapsed}ms`)
+      this.logger.log(JSON.stringify(response, null, 2))
     } catch {
       // fetch() itself throws on network failure (service not running, wrong port, etc.)
       throw new ServiceUnavailableException(

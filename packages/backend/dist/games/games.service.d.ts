@@ -44,6 +44,7 @@ export interface GameAnalysis {
  */
 export declare class GamesService {
     private readonly inferenceService;
+    private readonly logger;
     private readonly games;
     constructor(inferenceService: InferenceService);
     /** Create a fresh game and return it. */

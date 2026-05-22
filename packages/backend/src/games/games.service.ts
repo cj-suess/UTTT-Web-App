@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -73,6 +74,7 @@ export interface GameAnalysis {
  */
 @Injectable()
 export class GamesService {
+  private readonly logger = new Logger(GamesService.name);
   private readonly games = new Map<string, StoredGame>();
 
   constructor(private readonly inferenceService: InferenceService) {}
@@ -88,6 +90,7 @@ export class GamesService {
       lastAnalysis: null,
     };
     this.games.set(id, game);
+    this.logger.log(game.id, game.playerName);
     return game;
   }
 
@@ -117,6 +120,7 @@ export class GamesService {
     }
 
     game.state = applyMove(game.state, move);
+    this.logger.log(JSON.stringify(game.state))
     return game;
   }
 
@@ -142,6 +146,7 @@ export class GamesService {
 
     game.state = applyMove(game.state, move);
     game.lastAnalysis = analysis;
+    this.logger.log(JSON.stringify(game.state))
     return game;
   }
 

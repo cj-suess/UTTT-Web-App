@@ -10,6 +10,8 @@ Run locally with:
 """
 
 import os
+import logging
+import time
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -19,6 +21,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from game_utils import MCTS, UTTTNet, UTTTState
+
+logging.basicConfig(level=logging.INFO, format="[inference] %(message)s")
+logger = logging.getLogger("inference")
 
 # ---------------------------------------------------------------------------
 # Config
@@ -160,9 +165,14 @@ def get_move(req: MoveRequest):
     if not state.get_actions():
         raise HTTPException(status_code=400, detail="No legal moves available.")
 
+    start = time.time()
+
     # Fresh MCTS per request — never share search trees across users/games.
     mcts = MCTS(nnet, num_sims=req.sims, c_puct=1.0, device=DEVICE)
     visit_probs = mcts.search(state)
+
+    elapsed = time.time() - start
+    logger.info(f"MCTS: {req.sims} sims completed in {elapsed:.2f}s")
 
     root_key = state.to_key()
 
@@ -194,10 +204,22 @@ def get_move(req: MoveRequest):
         )
     candidates.sort(key=lambda c: c.visits, reverse=True)
 
-    return MoveResponse(
+    result = MoveResponse(
         best_move=best_move,
         candidates=candidates,
         value_estimate=float(mcts.Vs.get(root_key, 0.0)),
         principal_variation=compute_principal_variation(mcts, state),
         sims_used=req.sims,
     )
+
+    logger.info(f"Best move: macro={result.best_move[0]} cell={result.best_move[1]}")
+    logger.info(f"Value estimate: {result.value_estimate:.3f}  Win probability: {(result.value_estimate + 1) / 2:.1%}")
+    logger.info(f"Principal variation: {result.principal_variation}")
+    logger.info("Top candidates:")
+    for c in result.candidates[:5]:
+        logger.info(
+            f"  move={c.move}  visits={c.visits} ({c.visit_share:.1%})"
+            f"  q={c.q_value:.3f}  prior={c.prior:.4f}  best={c.is_best}"
+        )
+
+    return result

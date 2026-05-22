@@ -5,13 +5,15 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+var InferenceService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.InferenceService = void 0;
 const common_1 = require("@nestjs/common");
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
-let InferenceService = class InferenceService {
+let InferenceService = InferenceService_1 = class InferenceService {
+    logger = new common_1.Logger(InferenceService_1.name);
     /** Base URL of the Python inference service. Override via env var. */
     baseUrl = process.env['INFERENCE_URL'] ?? 'http://localhost:8000';
     /**
@@ -37,11 +39,15 @@ let InferenceService = class InferenceService {
         };
         let response;
         try {
+            const start = Date.now();
             response = await fetch(`${this.baseUrl}/move`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
             });
+            const elapsed = Date.now() - start;
+            this.logger.log(`Inference call completed in ${elapsed}ms`);
+            this.logger.log(JSON.stringify(response, null, 2));
         }
         catch {
             // fetch() itself throws on network failure (service not running, wrong port, etc.)
@@ -58,7 +64,7 @@ let InferenceService = class InferenceService {
     }
 };
 exports.InferenceService = InferenceService;
-exports.InferenceService = InferenceService = __decorate([
+exports.InferenceService = InferenceService = InferenceService_1 = __decorate([
     (0, common_1.Injectable)()
 ], InferenceService);
 //# sourceMappingURL=inference.service.js.map

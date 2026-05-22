@@ -8,6 +8,7 @@ export default function App() {
   const { game, loading, error, createGame, playMove } = useGame()
   const [playerName, setPlayerName] = useState('')
   const [showPrompt, setShowPrompt] = useState(false)
+  const [showConfirm, setConfirm] = useState(false)
 
   function statusText(): string {
     if (error) return error
@@ -22,32 +23,25 @@ export default function App() {
     return game.state.player === 1 ? 'It is your move ' + game.playerName : 'O to move'
   }
 
-  return (
-    <div className={styles.shell}>
-      <header className={styles.header}>
-        <span className={styles.logo}>UTTT</span>
-        <span className={styles.subtitle}>ULTIMATE TIC-TAC-TOE</span>
-      </header>
-
-      <main className={styles.boardArea}>
-        {game ? (
-          <Board
-            state={game.state}
-            onMove={playMove}
-            disabled={loading}
-          />
-        ) : showPrompt ? (
-          <form className={styles.namePrompt} onSubmit={e => {
-            e.preventDefault
+  function renderBoardArea() {
+    if(game) {
+      return(
+        <Board state={game.state} onMove={playMove} disabled={loading}/>
+      )
+    }
+    if(showPrompt) {
+      return (
+        <form className={styles.namePrompt} onSubmit={e => {
+            e.preventDefault()
             createGame(playerName.trim())
             setShowPrompt(false)
             setPlayerName('')
           }}>
-            <span style={{ color: 'var(--text-bright)', fontSize: '11px', letterSpacing: '0.15em' }}>
-              ENTER YOUR NAME
-            </span>
-            <div style={{display: 'flex', gap: '8px'}}>
-              <input
+          <span style={{ color: 'var(--text-bright)', fontSize: '11px', letterSpacing: '0.15em' }}>
+            ENTER YOUR NAME
+          </span>
+          <div style={{display: 'flex', gap: '8px'}}>
+            <input
             value={playerName}
             onChange={e => setPlayerName(e.target.value)}
             autoFocus
@@ -55,23 +49,83 @@ export default function App() {
             <button className={styles.btn} type='submit' disabled={playerName.trim() === ''}>
               START GAME
             </button>
-            </div>
-          </form>
-        ) : (
-          <span className={styles.placeholder}>Board</span>
-        )}
-      </main>
+          </div>
+        </form>
+      )
+    }
+    return null
+  }
 
-      <footer className={styles.statusBar}>
-        <span className={styles.statusText}>{statusText()}</span>
-        <button
-          className={styles.btn}
-          onClick={() => setShowPrompt(true)}
-          disabled={loading}
-        >
-          NEW GAME
-        </button>
-      </footer>
+  function renderFooter() {
+    if(showConfirm) {
+      if (game) {
+        return (
+          <>
+            <span className={styles.statusText}>Start over? Your game will be lost.</span>
+            <div>
+              <button
+                className={styles.btn}
+                onClick={ () => {
+                    createGame(game.playerName);
+                    setConfirm(false);
+                  }
+                }
+                disabled={loading}
+              >
+                YES
+              </button>
+
+              <button
+                className={styles.btn}
+                onClick={() => setConfirm(false)}
+                disabled={loading}
+              >
+                CANCEL
+              </button>
+            </div>
+          </>
+        )
+      }
+    } else {
+      if(!game) {
+        return (
+          <>
+            <span className={styles.statusText}>{ statusText() }</span>
+            <button
+              className={styles.btn}
+              onClick={() => setShowPrompt(true)}
+              disabled={loading}
+            >
+              NEW GAME
+            </button>
+          </>
+        )
+      } else {
+        return (
+          <>
+            <span className={styles.statusText}>{ statusText() }</span>
+            <button
+              className={styles.btn}
+              onClick={() => setConfirm(true)}
+              disabled={loading}
+            >
+              START OVER
+            </button>
+          </>
+        )
+      }
+    }
+    return null
+  }
+
+  return (
+    <div className={styles.shell}>
+      <header className={styles.header}>
+        <span className={styles.logo}>UTTT</span>
+        <span className={styles.subtitle}>ULTIMATE TIC-TAC-TOE</span>
+      </header>
+      <main className={styles.boardArea}> { renderBoardArea() } </main>
+      <footer className={styles.statusBar}> { renderFooter() } </footer>
     </div>
   )
 }

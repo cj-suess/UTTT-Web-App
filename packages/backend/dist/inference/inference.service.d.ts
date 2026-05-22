@@ -15,6 +15,7 @@ export interface InferenceMoveResponse {
     sims_used: number;
 }
 export declare class InferenceService {
+    private readonly logger;
     /** Base URL of the Python inference service. Override via env var. */
     private readonly baseUrl;
     /**

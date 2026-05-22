@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var GamesService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GamesService = void 0;
 const common_1 = require("@nestjs/common");
@@ -21,8 +22,9 @@ const inference_service_1 = require("../inference/inference.service");
  * Owns the in-memory map of active games and all game-rule enforcement.
  * HTTP concerns belong in the controller; business rules live here.
  */
-let GamesService = class GamesService {
+let GamesService = GamesService_1 = class GamesService {
     inferenceService;
+    logger = new common_1.Logger(GamesService_1.name);
     games = new Map();
     constructor(inferenceService) {
         this.inferenceService = inferenceService;
@@ -38,6 +40,7 @@ let GamesService = class GamesService {
             lastAnalysis: null,
         };
         this.games.set(id, game);
+        this.logger.log(game.id, game.playerName);
         return game;
     }
     /** Look up an existing game by id. Throws 404 if not found. */
@@ -61,6 +64,7 @@ let GamesService = class GamesService {
             throw new common_1.BadRequestException(`Move [${move[0]}, ${move[1]}] is not legal in the current position`);
         }
         game.state = (0, shared_1.applyMove)(game.state, move);
+        this.logger.log(JSON.stringify(game.state));
         return game;
     }
     /**
@@ -79,6 +83,7 @@ let GamesService = class GamesService {
         }
         game.state = (0, shared_1.applyMove)(game.state, move);
         game.lastAnalysis = analysis;
+        this.logger.log(JSON.stringify(game.state));
         return game;
     }
     /**
@@ -115,7 +120,7 @@ let GamesService = class GamesService {
     }
 };
 exports.GamesService = GamesService;
-exports.GamesService = GamesService = __decorate([
+exports.GamesService = GamesService = GamesService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [inference_service_1.InferenceService])
 ], GamesService);
