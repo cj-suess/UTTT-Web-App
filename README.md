@@ -1,6 +1,6 @@
-# UTTT — Ultimate Tic-Tac-Toe vs AlphaZero
+# UTTT — Ultimate Tic-Tac-Toe
 
-Play Ultimate Tic-Tac-Toe against a trained AlphaZero model in the browser. Includes a learning mode that uses Claude to explain the best move and why.
+Play Ultimate Tic-Tac-Toe against a trained AlphaZero-style model. Includes a learning mode that uses and LLM to explain the best move and why.
 
 ---
 
@@ -68,7 +68,7 @@ Create `packages/backend/.env`:
 ANTHROPIC_API_KEY=your_key_here
 ```
 
-Get a key at [console.anthropic.com](https://console.anthropic.com). The hint feature uses Claude Haiku — roughly $0.001 per hint request.
+Get a key at [console.anthropic.com](https://console.anthropic.com). The hint feature uses Claude Haiku.
 
 ---
 
