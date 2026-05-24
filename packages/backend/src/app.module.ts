@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { GamesModule } from './games/games.module';
+import { ConfigModule } from '@nestjs/config';
 
 /**
  * Root module of the application. Modules are NestJS's unit of organization:
@@ -12,7 +13,9 @@ import { GamesModule } from './games/games.module';
  * dependencies across module boundaries.
  */
 @Module({
-  imports: [GamesModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    GamesModule],
   controllers: [AppController],
   providers: [],
 })

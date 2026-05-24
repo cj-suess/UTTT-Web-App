@@ -10,6 +10,7 @@ exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const app_controller_1 = require("./app.controller");
 const games_module_1 = require("./games/games.module");
+const config_1 = require("@nestjs/config");
 /**
  * Root module of the application. Modules are NestJS's unit of organization:
  * they bundle together the controllers, providers (services), and any
@@ -24,7 +25,10 @@ let AppModule = class AppModule {
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
-        imports: [games_module_1.GamesModule],
+        imports: [
+            config_1.ConfigModule.forRoot({ isGlobal: true }),
+            games_module_1.GamesModule
+        ],
         controllers: [app_controller_1.AppController],
         providers: [],
     })

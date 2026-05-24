@@ -1,6 +1,9 @@
 import { ApplyMoveDto } from './apply-move.dto';
 import { GameAnalysis, GamesService, StoredGame } from './games.service';
 import { CreateGameDto } from './create-game.dto';
+import { LLMService } from '../llm/llm.service';
+import { MessageEvent } from '@nestjs/common';
+import { Observable } from 'rxjs';
 /**
  * HTTP endpoints for managing game sessions.
  *
@@ -11,7 +14,8 @@ import { CreateGameDto } from './create-game.dto';
  */
 export declare class GamesController {
     private readonly gamesService;
-    constructor(gamesService: GamesService);
+    private readonly llmService;
+    constructor(gamesService: GamesService, llmService: LLMService);
     /** POST /games — create a fresh game and return it. */
     create(body: CreateGameDto): StoredGame;
     /** GET /games/:id — fetch an existing game by id. */
@@ -34,4 +38,5 @@ export declare class GamesController {
      * Returns 404 if the game does not exist.
      */
     getAnalysis(id: string): GameAnalysis;
+    hintStream(id: string): Observable<MessageEvent>;
 }

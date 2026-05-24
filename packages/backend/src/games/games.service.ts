@@ -18,6 +18,7 @@ import {
   InferenceMoveResponse,
   InferenceService,
 } from '../inference/inference.service';
+import { buildHintPrompt } from '../llm/prompt-builder';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -90,7 +91,7 @@ export class GamesService {
       lastAnalysis: null,
     };
     this.games.set(id, game);
-    this.logger.log(game.id, game.playerName);
+    this.logger.log('Game ID: ' + game.id, 'Player Name: ' + game.playerName);
     return game;
   }
 
@@ -120,7 +121,6 @@ export class GamesService {
     }
 
     game.state = applyMove(game.state, move);
-    this.logger.log(JSON.stringify(game.state))
     return game;
   }
 
@@ -146,7 +146,6 @@ export class GamesService {
 
     game.state = applyMove(game.state, move);
     game.lastAnalysis = analysis;
-    this.logger.log(JSON.stringify(game.state))
     return game;
   }
 
@@ -161,7 +160,25 @@ export class GamesService {
         'No analysis available yet — the AI needs to make at least one move first.',
       );
     }
+    const prompt = buildHintPrompt(game.state, this.transformAnalysis(game.lastAnalysis));
+    this.logger.log('\n--- HINT PROMPT ---\n' + prompt + '\n---');
     return this.transformAnalysis(game.lastAnalysis);
+  }
+
+  /**
+   * Exposes the state + transformed analysis together so the controller doesn't need to know about the internal lastAnalysis type.
+   */
+  getHintContext(id: string): { state: GameState; analysis: GameAnalysis } {
+    const game = this.findById(id);
+    if (!game.lastAnalysis) {
+      throw new BadRequestException(
+        'No analysis available yet — the AI needs to make at least one move first.',
+      );
+    }
+    return {
+      state: game.state,
+      analysis: this.transformAnalysis(game.lastAnalysis),
+    };
   }
 
   /**

@@ -60,7 +60,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 // ─── Endpoints ───────────────────────────────────────────────────────────────
 
-const AI_SIMS = 1000;
+const AI_SIMS = 100;
 
 export const api = {
   /** POST /games — create a new game. */

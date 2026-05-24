@@ -71,7 +71,6 @@ export class InferenceService {
       });
       const elapsed = Date.now() - start
       this.logger.log(`Inference call completed in ${elapsed}ms`)
-      this.logger.log(JSON.stringify(response, null, 2))
     } catch {
       // fetch() itself throws on network failure (service not running, wrong port, etc.)
       throw new ServiceUnavailableException(

@@ -67,6 +67,13 @@ export declare class GamesService {
      */
     getAnalysis(id: string): GameAnalysis;
     /**
+     * Exposes the state + transformed analysis together so the controller doesn't need to know about the internal lastAnalysis type.
+     */
+    getHintContext(id: string): {
+        state: GameState;
+        analysis: GameAnalysis;
+    };
+    /**
      * Convert the snake_case inference response to camelCase for the frontend.
      * Also derives `winProbability` from `valueEstimate` for convenience.
      */

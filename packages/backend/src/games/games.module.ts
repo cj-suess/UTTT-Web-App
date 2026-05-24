@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { InferenceModule } from '../inference/inference.module';
 import { GamesController } from './games.controller';
 import { GamesService } from './games.service';
+import { LLMModule } from '../llm/llm.module';
 
 /**
  * Bundles everything related to game sessions: the controller (HTTP
@@ -13,7 +14,7 @@ import { GamesService } from './games.service';
  * injectable inside this module's providers (specifically `GamesService`).
  */
 @Module({
-  imports: [InferenceModule],
+  imports: [InferenceModule, LLMModule],
   controllers: [GamesController],
   providers: [GamesService],
 })

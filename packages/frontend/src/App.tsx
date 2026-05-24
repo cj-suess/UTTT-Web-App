@@ -3,9 +3,10 @@ import { Board } from './components/Board'
 import { useGame } from './hooks/useGame'
 import styles from './App.module.css'
 import { useState } from 'react'
+import { HintPanel } from './components/HintPanel'
 
 export default function App() {
-  const { game, loading, error, createGame, playMove } = useGame()
+  const { game, analysis, loading, error, createGame, playMove } = useGame()
   const [playerName, setPlayerName] = useState('')
   const [showPrompt, setShowPrompt] = useState(false)
   const [showConfirm, setConfirm] = useState(false)
@@ -20,7 +21,16 @@ export default function App() {
       return "It's a draw."
     }
     if (loading) return 'AI thinking...'
-    return game.state.player === 1 ? 'It is your move ' + game.playerName : 'O to move'
+    const turnText = game.state.player === 1
+      ? `Your turn, ${game.playerName}`
+      : 'AI to move'
+
+    if (analysis && !isTerminal(game.state)) {
+      const prob = Math.round((1 - analysis.winProbability) * 100)
+      return `${turnText} | Win probability: ${prob}%`
+  }
+
+  return turnText
   }
 
   function renderBoardArea() {
@@ -124,7 +134,21 @@ export default function App() {
         <span className={styles.logo}>UTTT</span>
         <span className={styles.subtitle}>ULTIMATE TIC-TAC-TOE</span>
       </header>
-      <main className={styles.boardArea}> { renderBoardArea() } </main>
+      <main className={styles.content}>
+        <div className={styles.boardSection}>
+          {renderBoardArea()}
+        </div>
+        <div className={styles.learningPanel}>
+          {game && (
+            <HintPanel
+              gameId={game.id}
+              isHumanTurn={game.state.player === 1 && !isTerminal(game.state) && !loading}
+              analysis={analysis}
+              moveCount={game.state.board.filter(c => c !== 0).length}
+            />
+          )}
+        </div>
+      </main>
       <footer className={styles.statusBar}> { renderFooter() } </footer>
     </div>
   )

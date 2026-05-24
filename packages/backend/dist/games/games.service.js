@@ -15,6 +15,7 @@ const common_1 = require("@nestjs/common");
 const node_crypto_1 = require("node:crypto");
 const shared_1 = require("@uttt/shared");
 const inference_service_1 = require("../inference/inference.service");
+const prompt_builder_1 = require("../llm/prompt-builder");
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -40,7 +41,7 @@ let GamesService = GamesService_1 = class GamesService {
             lastAnalysis: null,
         };
         this.games.set(id, game);
-        this.logger.log(game.id, game.playerName);
+        this.logger.log('Game ID: ' + game.id, 'Player Name: ' + game.playerName);
         return game;
     }
     /** Look up an existing game by id. Throws 404 if not found. */
@@ -64,7 +65,6 @@ let GamesService = GamesService_1 = class GamesService {
             throw new common_1.BadRequestException(`Move [${move[0]}, ${move[1]}] is not legal in the current position`);
         }
         game.state = (0, shared_1.applyMove)(game.state, move);
-        this.logger.log(JSON.stringify(game.state));
         return game;
     }
     /**
@@ -83,7 +83,6 @@ let GamesService = GamesService_1 = class GamesService {
         }
         game.state = (0, shared_1.applyMove)(game.state, move);
         game.lastAnalysis = analysis;
-        this.logger.log(JSON.stringify(game.state));
         return game;
     }
     /**
@@ -95,7 +94,22 @@ let GamesService = GamesService_1 = class GamesService {
         if (!game.lastAnalysis) {
             throw new common_1.BadRequestException('No analysis available yet — the AI needs to make at least one move first.');
         }
+        const prompt = (0, prompt_builder_1.buildHintPrompt)(game.state, this.transformAnalysis(game.lastAnalysis));
+        this.logger.log('\n--- HINT PROMPT ---\n' + prompt + '\n---');
         return this.transformAnalysis(game.lastAnalysis);
+    }
+    /**
+     * Exposes the state + transformed analysis together so the controller doesn't need to know about the internal lastAnalysis type.
+     */
+    getHintContext(id) {
+        const game = this.findById(id);
+        if (!game.lastAnalysis) {
+            throw new common_1.BadRequestException('No analysis available yet — the AI needs to make at least one move first.');
+        }
+        return {
+            state: game.state,
+            analysis: this.transformAnalysis(game.lastAnalysis),
+        };
     }
     /**
      * Convert the snake_case inference response to camelCase for the frontend.

@@ -29,7 +29,7 @@ logger = logging.getLogger("inference")
 # Config
 # ---------------------------------------------------------------------------
 DEVICE = os.environ.get("DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
-MODEL_PATH = os.environ.get("MODEL_PATH", "models/playable-4.pth")
+MODEL_PATH = os.environ.get("MODEL_PATH", "models/playable-6.pth")
 CHANNELS = int(os.environ.get("CHANNELS", "128"))
 NUM_RES_BLOCKS = int(os.environ.get("NUM_RES_BLOCKS", "10"))
 
@@ -99,7 +99,7 @@ class MoveResponse(BaseModel):
 
 class MoveRequest(BaseModel):
     state: GameStateDTO
-    sims: int = Field(800, ge=1, le=4000, description="MCTS simulations per move.")
+    sims: int = Field(800, ge=1, le=10000, description="MCTS simulations per move.")
 
 
 # ---------------------------------------------------------------------------

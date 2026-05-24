@@ -1,7 +1,11 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApplyMoveDto } from './apply-move.dto';
 import { GameAnalysis, GamesService, StoredGame } from './games.service';
 import { CreateGameDto } from './create-game.dto';
+import { buildHintPrompt } from '../llm/prompt-builder';
+import { LLMService } from '../llm/llm.service';
+import { MessageEvent, Sse } from '@nestjs/common';
+import { Observable } from 'rxjs';
 
 /**
  * HTTP endpoints for managing game sessions.
@@ -13,7 +17,10 @@ import { CreateGameDto } from './create-game.dto';
  */
 @Controller('games')
 export class GamesController {
-  constructor(private readonly gamesService: GamesService) {}
+  constructor(
+    private readonly gamesService: GamesService,
+    private readonly llmService: LLMService,
+  ) {}
 
   /** POST /games — create a fresh game and return it. */
   @Post()
@@ -63,4 +70,28 @@ export class GamesController {
   getAnalysis(@Param('id') id: string): GameAnalysis {
     return this.gamesService.getAnalysis(id);
   }
+
+  @Get(':id/hint')
+  @Sse()
+  hintStream(@Param('id') id: string): Observable<MessageEvent> {
+    return new Observable(subscriber => {
+      (async () => {
+        const { state, analysis } = this.gamesService.getHintContext(id);
+        const prompt = buildHintPrompt(state, analysis);
+
+        if (!prompt) {
+          subscriber.error(
+            new BadRequestException('Insufficient data to generate a hint.'),
+          );
+          return;
+        }
+
+        for await (const token of this.llmService.streamHint(prompt)) {
+          subscriber.next({ data: { token } } as MessageEvent);
+        }
+        subscriber.complete();
+      })().catch(err => subscriber.error(err));
+    });
+  }
+  
 }

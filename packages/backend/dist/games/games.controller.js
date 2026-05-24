@@ -17,6 +17,10 @@ const common_1 = require("@nestjs/common");
 const apply_move_dto_1 = require("./apply-move.dto");
 const games_service_1 = require("./games.service");
 const create_game_dto_1 = require("./create-game.dto");
+const prompt_builder_1 = require("../llm/prompt-builder");
+const llm_service_1 = require("../llm/llm.service");
+const common_2 = require("@nestjs/common");
+const rxjs_1 = require("rxjs");
 /**
  * HTTP endpoints for managing game sessions.
  *
@@ -27,8 +31,10 @@ const create_game_dto_1 = require("./create-game.dto");
  */
 let GamesController = class GamesController {
     gamesService;
-    constructor(gamesService) {
+    llmService;
+    constructor(gamesService, llmService) {
         this.gamesService = gamesService;
+        this.llmService = llmService;
     }
     /** POST /games — create a fresh game and return it. */
     create(body) {
@@ -62,6 +68,22 @@ let GamesController = class GamesController {
      */
     getAnalysis(id) {
         return this.gamesService.getAnalysis(id);
+    }
+    hintStream(id) {
+        return new rxjs_1.Observable(subscriber => {
+            (async () => {
+                const { state, analysis } = this.gamesService.getHintContext(id);
+                const prompt = (0, prompt_builder_1.buildHintPrompt)(state, analysis);
+                if (!prompt) {
+                    subscriber.error(new common_1.BadRequestException('Insufficient data to generate a hint.'));
+                    return;
+                }
+                for await (const token of this.llmService.streamHint(prompt)) {
+                    subscriber.next({ data: { token } });
+                }
+                subscriber.complete();
+            })().catch(err => subscriber.error(err));
+        });
     }
 };
 exports.GamesController = GamesController;
@@ -102,8 +124,17 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Object)
 ], GamesController.prototype, "getAnalysis", null);
+__decorate([
+    (0, common_1.Get)(':id/hint'),
+    (0, common_2.Sse)(),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", rxjs_1.Observable)
+], GamesController.prototype, "hintStream", null);
 exports.GamesController = GamesController = __decorate([
     (0, common_1.Controller)('games'),
-    __metadata("design:paramtypes", [games_service_1.GamesService])
+    __metadata("design:paramtypes", [games_service_1.GamesService,
+        llm_service_1.LLMService])
 ], GamesController);
 //# sourceMappingURL=games.controller.js.map
