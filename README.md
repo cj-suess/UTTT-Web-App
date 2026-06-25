@@ -49,16 +49,21 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Add your trained model
+### 3. Models
 
-Copy your exported model checkpoint into `inference/models/`:
+Three difficulty models are included in `inference/models/`:
+
+| File | Difficulty | Notes |
+|------|-----------|-------|
+| `easy.pth` | Easy | 128ch / 4-input / 3M params — beatable by beginners |
+| `medium.pth` | Medium | 128ch / 7-input / 3M params — won 100% vs easy |
+| `hard.pth` | Hard | 256ch / 7-input / 12M params — strongest model |
+
+The active model is set via `MODEL_PATH` in `inference/main.py` (defaults to `hard.pth`). You can also override it at runtime:
 
 ```bash
-mkdir -p inference/models
-cp /path/to/your/playable.pth inference/models/best_model.pth
+MODEL_PATH=models/easy.pth uvicorn main:app --reload --port 8000
 ```
-
-The model path is configured in `inference/main.py` via the `MODEL_PATH` variable.
 
 ### 4. Add your Anthropic API key (for the hint feature)
 

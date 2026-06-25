@@ -90,7 +90,15 @@ The Vite dev server proxies `/api/*` to `http://localhost:3000`, stripping the p
 
 ### `inference/` (Python)
 
-FastAPI + PyTorch. Loads the model at startup from `MODEL_PATH` (default `models/playable-8-256-7.pth`). Supports both full training checkpoints (`model_state_dict` key) and slimmed playable exports (plain state dict). Auto-detects architecture (channels, residual blocks, input channels) from the weights.
+FastAPI + PyTorch. Loads the model at startup from `MODEL_PATH` (default `models/hard.pth`). Supports both full training checkpoints (`model_state_dict` key) and slimmed playable exports (plain state dict). Auto-detects architecture (channels, residual blocks, input channels) from the weights.
+
+Three difficulty models live in `inference/models/`:
+
+| File | Arch | Notes |
+|------|------|-------|
+| `easy.pth` | 128ch / 4-input / 3M params | Beatable by beginners |
+| `medium.pth` | 128ch / 7-input / 3M params | Won 100% vs easy in tournament |
+| `hard.pth` | 256ch / 7-input / 12M params | Best trained model; won 100% vs medium |
 
 `/move` POST: accepts a snake_case `GameStateDTO`, runs a fresh MCTS instance per request, and returns `MoveResponse` with `best_move`, `candidates` (per-move visit counts, Q-values, priors), `value_estimate` (network value from O's perspective), `search_value` (visit-weighted mean Q), `principal_variation`, and `sims_used`.
 
@@ -102,9 +110,9 @@ FastAPI + PyTorch. Loads the model at startup from `MODEL_PATH` (default `models
 
 **PV index convention:** `principalVariation[0]` = the AI's move just played (already on the board), `principalVariation[1]` = recommended X response, `[2]` = AI's expected counter, etc. `prompt-builder.ts` starts iteration at index 1 for the human hint.
 
-**Swapping models:** change `MODEL_PATH` in `inference/main.py` or set the env var. Uvicorn `--reload` detects the change. To export a slim playable checkpoint from a full training checkpoint:
+**Swapping models:** change `MODEL_PATH` in `inference/main.py` or set the env var to `models/easy.pth`, `models/medium.pth`, or `models/hard.pth`. Uvicorn `--reload` detects the change without a restart. To export a slim playable checkpoint from a full training checkpoint:
 ```python
 import torch
-d = torch.load('models/best_model.pth', map_location='cpu')
-torch.save(d['model_state_dict'], 'models/playable.pth')
+d = torch.load('checkpoint.pth', map_location='cpu')
+torch.save(d['model_state_dict'], 'models/hard.pth')
 ```

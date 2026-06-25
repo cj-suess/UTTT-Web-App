@@ -21,7 +21,7 @@ logger = logging.getLogger("inference")
 
 # config
 DEVICE     = os.environ.get("DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
-MODEL_PATH = os.environ.get("MODEL_PATH", "models/playable-8-256-7.pth")
+MODEL_PATH = os.environ.get("MODEL_PATH", "models/hard.pth")
 
 # load model at startup
 print(f"[inference] Loading model from {MODEL_PATH} on {DEVICE}...")
