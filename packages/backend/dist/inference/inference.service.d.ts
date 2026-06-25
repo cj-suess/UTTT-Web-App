@@ -1,4 +1,5 @@
 import { GameState } from '@uttt/shared';
+import { Difficulty } from '../games/create-game.dto';
 export interface InferenceCandidateMove {
     move: [number, number];
     visits: number;
@@ -17,16 +18,14 @@ export interface InferenceMoveResponse {
 }
 export declare class InferenceService {
     private readonly logger;
-    /** Base URL of the Python inference service. Override via env var. */
     private readonly baseUrl;
     /**
-     * Ask the inference service for the best move from the given state.
+     * ask the inference service for the best move from the given state
+     * this will return the full MCTS analysis (visit counts, Q-values, principal
+     * variation) so it can be stored for the hint endpoint
      *
-     * Returns the full MCTS analysis (visit counts, Q-values, principal
-     * variation) so callers can store it for the learning-mode endpoint.
-     *
-     * @param state  Current game state to analyse.
-     * @param sims   Number of MCTS simulations. Lower = faster but weaker.
+     * @param state  current game state to analyze
+     * @param sims   number of MCTS simulations
      */
-    getMove(state: GameState, sims?: number): Promise<InferenceMoveResponse>;
+    getMove(state: GameState, sims?: number, difficulty?: Difficulty): Promise<InferenceMoveResponse>;
 }

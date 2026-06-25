@@ -9,25 +9,20 @@ var InferenceService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.InferenceService = void 0;
 const common_1 = require("@nestjs/common");
-// ---------------------------------------------------------------------------
-// Service
-// ---------------------------------------------------------------------------
 let InferenceService = InferenceService_1 = class InferenceService {
     logger = new common_1.Logger(InferenceService_1.name);
-    /** Base URL of the Python inference service. Override via env var. */
+    // base URL of the inference service (override via env var)
     baseUrl = process.env['INFERENCE_URL'] ?? 'http://localhost:8000';
     /**
-     * Ask the inference service for the best move from the given state.
+     * ask the inference service for the best move from the given state
+     * this will return the full MCTS analysis (visit counts, Q-values, principal
+     * variation) so it can be stored for the hint endpoint
      *
-     * Returns the full MCTS analysis (visit counts, Q-values, principal
-     * variation) so callers can store it for the learning-mode endpoint.
-     *
-     * @param state  Current game state to analyse.
-     * @param sims   Number of MCTS simulations. Lower = faster but weaker.
+     * @param state  current game state to analyze
+     * @param sims   number of MCTS simulations
      */
-    async getMove(state, sims = 400) {
-        // Translate from camelCase (NestJS / @uttt/shared convention) to
-        // snake_case (Python / FastAPI convention) before sending.
+    async getMove(state, sims = 400, difficulty = 'hard') {
+        // translate from camelCase (NestJS/@uttt/shared) to snake_case (python/FastAPI) before sending
         const body = {
             state: {
                 board: [...state.board],
@@ -36,6 +31,7 @@ let InferenceService = InferenceService_1 = class InferenceService {
                 next_micro: state.nextMicro, // nextMicro → next_micro
             },
             sims,
+            difficulty,
         };
         let response;
         try {
@@ -49,16 +45,12 @@ let InferenceService = InferenceService_1 = class InferenceService {
             this.logger.log(`Inference call completed in ${elapsed}ms`);
         }
         catch {
-            // fetch() itself throws on network failure (service not running, wrong port, etc.)
             throw new common_1.ServiceUnavailableException(`Inference service unreachable at ${this.baseUrl}. Is it running?`);
         }
         if (!response.ok) {
             const detail = await response.text();
             throw new common_1.InternalServerErrorException(`Inference service error ${response.status}: ${detail}`);
         }
-        // The JSON already has snake_case field names; we expose them as-is so
-        // consumers can decide how to present them. The analysis endpoint (step 8)
-        // will do any camelCase conversion before forwarding to the frontend.
         return response.json();
     }
 };

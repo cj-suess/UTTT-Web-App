@@ -1,12 +1,12 @@
-# UTTT Inferene Service
-# wraps the trained model and exposes a /move endpoint that returns the best move and full MCTS readout
-#   visit counts, Q-values, policy priors, principal variation, value estimate
+# UTTT Inference Service
+# loads all three difficulty models at startup and exposes a /move endpoint
 # to run locally:
 #   uvicorn main:app --reload --port 8000
 import os
 import logging
 import time
-from typing import List, Optional, Tuple
+from pathlib import Path
+from typing import List, Literal, Optional, Tuple
 
 import numpy as np
 import torch
@@ -19,58 +19,58 @@ from game_utils import MCTS, UTTTNet, UTTTState
 logging.basicConfig(level=logging.INFO, format="[inference] %(message)s")
 logger = logging.getLogger("inference")
 
-# config
-DEVICE     = os.environ.get("DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
-MODEL_PATH = os.environ.get("MODEL_PATH", "models/hard.pth")
+DEVICE    = os.environ.get("DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
+MODEL_DIR = os.environ.get("MODEL_DIR", "models")
 
-# load model at startup
-print(f"[inference] Loading model from {MODEL_PATH} on {DEVICE}...")
-_loaded = torch.load(MODEL_PATH, map_location=DEVICE, weights_only=False)
+# ─── Encoders ─────────────────────────────────────────────────────────────────
+# Save the default 7-channel encoder before any potential patching.
+_encode_7ch = MCTS._encode_state
 
-# this will normalise to a plain state dict (from full checkpoint or slimmed down version)
-if isinstance(_loaded, dict) and "model_state_dict" in _loaded:
-    _sd             = _loaded["model_state_dict"]
-    MODEL_ITERATION = _loaded.get("iteration", None)
-    _blocks         = _loaded.get("arch", {}).get("num_res_blocks", 10)
-elif isinstance(_loaded, dict) and "conv1.weight" in _loaded:
-    _sd             = _loaded
-    MODEL_ITERATION = None
-    _blocks         = 10
-else:
-    raise RuntimeError(f"Unrecognised checkpoint format in {MODEL_PATH}")
+def _encode_4ch(state):
+    board_flat    = np.array(state.board, dtype=np.float32)
+    board_spatial = MCTS._linear_to_spatial(board_flat)
+    ch_own  = (board_spatial ==  state.player).astype(np.float32)
+    ch_opp  = (board_spatial == -state.player).astype(np.float32)
+    ch_turn = np.full((9, 9), state.player, dtype=np.float32)
+    mask    = np.zeros(81, dtype=np.float32)
+    for m, c in state.get_actions():
+        mask[m * 9 + c] = 1.0
+    return np.stack([ch_own, ch_opp, ch_turn, MCTS._linear_to_spatial(mask)], axis=0)
 
-# detect architecture from the weights
-_channels    = _sd["conv1.weight"].shape[0]
-_in_channels = _sd["conv1.weight"].shape[1]
+# ─── Model loading ────────────────────────────────────────────────────────────
+def _load_model(path: str) -> dict:
+    loaded = torch.load(path, map_location=DEVICE, weights_only=False)
+    if isinstance(loaded, dict) and "model_state_dict" in loaded:
+        sd     = loaded["model_state_dict"]
+        blocks = loaded.get("arch", {}).get("num_res_blocks", 10)
+    elif isinstance(loaded, dict) and "conv1.weight" in loaded:
+        sd     = loaded
+        blocks = 10
+    else:
+        raise RuntimeError(f"Unrecognised checkpoint format in {path}")
 
-nnet = UTTTNet(channels=_channels, num_res_blocks=_blocks,
-               in_channels=_in_channels).to(DEVICE)
-nnet.load_state_dict(_sd)
-nnet.eval()
+    channels    = sd["conv1.weight"].shape[0]
+    in_channels = sd["conv1.weight"].shape[1]
 
-# more stuff to handle models from older architectures
-if _in_channels == 4:
-    def _encode_state_4ch(state):
-        board_flat    = np.array(state.board, dtype=np.float32)
-        board_spatial = MCTS._linear_to_spatial(board_flat)
-        ch_own  = (board_spatial ==  state.player).astype(np.float32)
-        ch_opp  = (board_spatial == -state.player).astype(np.float32)
-        ch_turn = np.full((9, 9), state.player, dtype=np.float32)
-        mask    = np.zeros(81, dtype=np.float32)
-        for m, c in state.get_actions():
-            mask[m * 9 + c] = 1.0
-        return np.stack(
-            [ch_own, ch_opp, ch_turn, MCTS._linear_to_spatial(mask)], axis=0
-        )
-    MCTS._encode_state = staticmethod(_encode_state_4ch)
+    net = UTTTNet(channels=channels, num_res_blocks=blocks,
+                  in_channels=in_channels).to(DEVICE)
+    net.load_state_dict(sd)
+    net.eval()
 
-print(f"[inference] Model loaded — {_channels}ch / {_in_channels}-input / "
-      f"iter {MODEL_ITERATION if MODEL_ITERATION is not None else 'unknown'}")
+    encoder = _encode_4ch if in_channels == 4 else _encode_7ch
+    print(f"[inference]   {Path(path).stem}: {channels}ch / {in_channels}-input")
+    return {"net": net, "encoder": encoder, "channels": channels, "in_channels": in_channels}
+
+
+print(f"[inference] Loading models from {MODEL_DIR}/ on {DEVICE}...")
+_models: dict = {}
+for _difficulty in ("easy", "medium", "hard"):
+    _models[_difficulty] = _load_model(f"{MODEL_DIR}/{_difficulty}.pth")
+print("[inference] All models ready.")
 
 
 app = FastAPI(title="UTTT Inference", version="0.1.0")
 
-# permissive CORS for local dev (update later)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -81,38 +81,37 @@ app.add_middleware(
 
 # DTOs
 class GameStateDTO(BaseModel):
-    # client representation of a UTTT state
-    board: List[int] = Field(..., min_length=81, max_length=81,
-                             description="81 cells, macro-major order. 1=X, -1=O, 0=empty.")
-    macro: List[int] = Field(..., min_length=9, max_length=9,
-                             description="9 macro-cells. 1=X won, -1=O won, 2=draw, 0=open.")
-    player: int = Field(..., description="Whose turn: 1 (X) or -1 (O).")
+    board:      List[int] = Field(..., min_length=81, max_length=81,
+                                  description="81 cells, macro-major order. 1=X, -1=O, 0=empty.")
+    macro:      List[int] = Field(..., min_length=9, max_length=9,
+                                  description="9 macro-cells. 1=X won, -1=O won, 2=draw, 0=open.")
+    player:     int       = Field(..., description="Whose turn: 1 (X) or -1 (O).")
     next_micro: Optional[int] = Field(None, ge=0, le=8,
                                       description="Constrained micro-board (0-8), or null for free.")
 
 
 class MoveAnalysis(BaseModel):
-    # per-move breakdown the frontend uses to render the learning overlay
-    move: Tuple[int, int]
-    visits: int
+    move:        Tuple[int, int]
+    visits:      int
     visit_share: float
-    q_value: float
-    prior: float
-    is_best: bool
+    q_value:     float
+    prior:       float
+    is_best:     bool
 
 
 class MoveResponse(BaseModel):
-    best_move: Tuple[int, int]
-    candidates: List[MoveAnalysis]
-    value_estimate: float
-    search_value: float              # visit-weighted mean Q — search-refined estimate
+    best_move:           Tuple[int, int]
+    candidates:          List[MoveAnalysis]
+    value_estimate:      float
+    search_value:        float
     principal_variation: List[Tuple[int, int]]
-    sims_used: int
+    sims_used:           int
 
 
 class MoveRequest(BaseModel):
-    state: GameStateDTO
-    sims: int = Field(800, ge=1, le=10000, description="MCTS simulations per move.")
+    state:      GameStateDTO
+    sims:       int = Field(800, ge=1, le=10000, description="MCTS simulations per move.")
+    difficulty: Literal["easy", "medium", "hard"] = "hard"
 
 
 # helpers
@@ -155,12 +154,10 @@ def compute_principal_variation(
 @app.get("/health")
 def health():
     return {
-        "status":      "ok",
-        "device":      DEVICE,
-        "model_path":  MODEL_PATH,
-        "iteration":   MODEL_ITERATION,
-        "channels":    _channels,
-        "in_channels": _in_channels,
+        "status":  "ok",
+        "device":  DEVICE,
+        "models":  {d: f"{_models[d]['channels']}ch / {_models[d]['in_channels']}-input"
+                    for d in _models},
     }
 
 
@@ -172,22 +169,24 @@ def get_move(req: MoveRequest):
     if not state.get_actions():
         raise HTTPException(status_code=400, detail="No legal moves available.")
 
-    start = time.time()
+    model = _models[req.difficulty]
 
-    # fresh MCTS per request
-    mcts = MCTS(nnet, num_sims=req.sims, c_puct=1.0, device=DEVICE)
+    # Patch the class-level encoder before constructing MCTS.
+    # Safe: Python's GIL and synchronous search mean only one request runs at a time.
+    MCTS._encode_state = staticmethod(model["encoder"])
+
+    start = time.time()
+    mcts = MCTS(model["net"], num_sims=req.sims, c_puct=1.0, device=DEVICE)
     visit_probs = mcts.search(state)
 
     elapsed = time.time() - start
-    logger.info(f"MCTS: {req.sims} sims completed in {elapsed:.2f}s")
+    logger.info(f"[{req.difficulty}] MCTS: {req.sims} sims in {elapsed:.2f}s")
 
     root_key = state.to_key()
 
-    # the best move is the one most visited
     best_idx  = int(np.argmax(visit_probs))
     best_move = (best_idx // 9, best_idx % 9)
 
-    # build per-move analysis for every legal move
     total_visits = mcts.Ns.get(root_key, req.sims)
     priors       = mcts.Ps.get(root_key, np.zeros(81))
     candidates: List[MoveAnalysis] = []

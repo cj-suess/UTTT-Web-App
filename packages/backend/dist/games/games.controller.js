@@ -40,7 +40,7 @@ let GamesController = GamesController_1 = class GamesController {
     }
     /** POST /games — create a fresh game and return it. */
     create(body) {
-        return this.gamesService.create(body.playerName);
+        return this.gamesService.create(body.playerName, body.difficulty);
     }
     /** GET /games/:id — fetch an existing game by id. */
     findById(id) {

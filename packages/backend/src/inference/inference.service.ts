@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { GameState } from '@uttt/shared';
+import { Difficulty } from '../games/create-game.dto';
 
 // response types from the inference service
 
@@ -41,7 +42,7 @@ export class InferenceService {
    * @param state  current game state to analyze
    * @param sims   number of MCTS simulations
    */
-  async getMove(state: GameState, sims = 400): Promise<InferenceMoveResponse> {
+  async getMove(state: GameState, sims = 400, difficulty: Difficulty = 'hard'): Promise<InferenceMoveResponse> {
     // translate from camelCase (NestJS/@uttt/shared) to snake_case (python/FastAPI) before sending
     const body = {
       state: {
@@ -51,6 +52,7 @@ export class InferenceService {
         next_micro: state.nextMicro,    // nextMicro → next_micro
       },
       sims,
+      difficulty,
     };
 
     let response: Response;

@@ -11,6 +11,8 @@
 
 import type { GameState, Move } from '@uttt/shared';
 
+export type Difficulty = 'easy' | 'medium' | 'hard';
+
 // ─── Response types ──────────────────────────────────────────────────────────
 // These mirror the shapes returned by the NestJS controllers.
 
@@ -36,6 +38,7 @@ export interface GameResponse {
   id: string;
   state: GameState;
   playerName: string;
+  difficulty: Difficulty;
   createdAt: string;
   // lastAnalysis exists on the backend but is snake_case (internal format).
   // Always use getAnalysis() for typed, camelCase analysis data.
@@ -64,11 +67,11 @@ const AI_SIMS = 100;
 
 export const api = {
   /** POST /games — create a new game. */
-  createGame: (playerName: string) =>
-    request<GameResponse>('/games', { 
+  createGame: (playerName: string, difficulty: Difficulty = 'hard') =>
+    request<GameResponse>('/games', {
       method: 'POST',
-      body: JSON.stringify({ playerName })
-     }),
+      body: JSON.stringify({ playerName, difficulty }),
+    }),
 
   /** GET /games/:id — fetch the current game state. */
   getGame: (id: string) =>

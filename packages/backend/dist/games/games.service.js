@@ -33,17 +33,18 @@ let GamesService = GamesService_1 = class GamesService {
     constructor(inferenceService) {
         this.inferenceService = inferenceService;
     }
-    create(playerName) {
+    create(playerName, difficulty = 'hard') {
         const id = (0, node_crypto_1.randomUUID)();
         const game = {
             id,
             state: (0, shared_1.initialState)(),
             playerName,
+            difficulty,
             createdAt: new Date(),
             lastAnalysis: null,
         };
         this.games.set(id, game);
-        this.logger.log('Game ID: ' + game.id, 'Player Name: ' + game.playerName);
+        this.logger.log(`Game ID: ${game.id}  Player: ${game.playerName}  Difficulty: ${game.difficulty}`);
         return game;
     }
     findById(id) {
@@ -65,7 +66,7 @@ let GamesService = GamesService_1 = class GamesService {
         const game = this.findById(id);
         if ((0, shared_1.isTerminal)(game.state))
             throw new common_1.BadRequestException('Game is already over');
-        const analysis = await this.inferenceService.getMove(game.state, sims);
+        const analysis = await this.inferenceService.getMove(game.state, sims, game.difficulty);
         const move = analysis.best_move;
         if (!(0, shared_1.isLegalMove)(game.state, move))
             throw new common_1.InternalServerErrorException(`Inference returned illegal move [${move}] — possible state encoding mismatch`);

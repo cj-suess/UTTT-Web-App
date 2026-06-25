@@ -26,7 +26,7 @@ export class GamesController {
   /** POST /games — create a fresh game and return it. */
   @Post()
   create(@Body() body: CreateGameDto): StoredGame {
-    return this.gamesService.create(body.playerName);
+    return this.gamesService.create(body.playerName, body.difficulty);
   }
 
   /** GET /games/:id — fetch an existing game by id. */

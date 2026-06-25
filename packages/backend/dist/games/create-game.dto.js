@@ -13,6 +13,7 @@ exports.CreateGameDto = void 0;
 const class_validator_1 = require("class-validator");
 class CreateGameDto {
     playerName;
+    difficulty = 'hard';
 }
 exports.CreateGameDto = CreateGameDto;
 __decorate([
@@ -21,4 +22,8 @@ __decorate([
     (0, class_validator_1.MaxLength)(20),
     __metadata("design:type", String)
 ], CreateGameDto.prototype, "playerName", void 0);
+__decorate([
+    (0, class_validator_1.IsIn)(['easy', 'medium', 'hard']),
+    __metadata("design:type", String)
+], CreateGameDto.prototype, "difficulty", void 0);
 //# sourceMappingURL=create-game.dto.js.map

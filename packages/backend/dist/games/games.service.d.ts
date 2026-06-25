@@ -1,9 +1,11 @@
 import { GameState, Move } from '@uttt/shared';
 import { InferenceMoveResponse, InferenceService } from '../inference/inference.service';
+import { Difficulty } from './create-game.dto';
 export interface StoredGame {
     id: string;
     state: GameState;
     playerName: string;
+    difficulty: Difficulty;
     createdAt: Date;
     lastAnalysis: InferenceMoveResponse | null;
 }
@@ -17,9 +19,8 @@ export interface CandidateMoveAnalysis {
 }
 /**
  * Primary tactical pattern of the recommended move, detected from game state.
- * 
- * Priority order: 
- *      IMMEDIATE_WIN > BLOCK > FORK > FORK_BLOCK > CENTER_CONTROL > CORNER_PLAY > POSITIONAL
+ * Priority order: IMMEDIATE_WIN > BLOCK > FORK > FORK_BLOCK > CENTER_CONTROL
+ *                 > CORNER_PLAY > POSITIONAL
  */
 export type MoveStrategy = 'IMMEDIATE_WIN' | 'BLOCK' | 'FORK' | 'FORK_BLOCK' | 'CENTER_CONTROL' | 'CORNER_PLAY' | 'POSITIONAL';
 /**
@@ -78,7 +79,7 @@ export declare class GamesService {
     private readonly logger;
     private readonly games;
     constructor(inferenceService: InferenceService);
-    create(playerName: string): StoredGame;
+    create(playerName: string, difficulty?: Difficulty): StoredGame;
     findById(id: string): StoredGame;
     applyMove(id: string, move: Move): StoredGame;
     applyAiMove(id: string, sims?: number): Promise<StoredGame>;

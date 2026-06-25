@@ -15,7 +15,7 @@ import { useState } from 'react';
 import { isTerminal } from '@uttt/shared';
 import type { Move } from '@uttt/shared';
 import { api } from '../api/client';
-import type { GameAnalysis, GameResponse } from '../api/client';
+import type { Difficulty, GameAnalysis, GameResponse } from '../api/client';
 
 interface State {
   game: GameResponse | null;
@@ -51,10 +51,10 @@ export function useGame() {
   // ─── Actions ───────────────────────────────────────────────────────────────
 
   /** Create a fresh game and reset all state. */
-  async function createGame(playerName: string) {
+  async function createGame(playerName: string, difficulty: Difficulty = 'hard') {
     begin();
     try {
-      const game = await api.createGame(playerName);
+      const game = await api.createGame(playerName, difficulty);
       setState({ game, analysis: null, loading: false, error: null });
     } catch (e) {
       fail(e);

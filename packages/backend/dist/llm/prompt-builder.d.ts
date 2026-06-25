@@ -1,7 +1,27 @@
 /**
- * Prompt builder for the UTTT learning feature
+ * Prompt builder for the UTTT learning feature.
  *
- * Translates GameState + GameAnalysis into a structured, human-readable context string for the LLM
+ * Translates GameState + GameAnalysis into a structured, human-readable
+ * context string for Claude Haiku.
+ *
+ * Uses cached analysis from the AI's last move (Option B): PV[1] is X's
+ * recommended response, derived from the AI's own search tree.
+ *
+ * ─── PENDING BACKEND CHANGES ──────────────────────────────────────────────
+ * This file references the following new fields on GameAnalysis that must be
+ * added to games.service.ts and (where noted) to main.py:
+ *
+ *   networkValue: number         — raw network output before search (rename
+ *                                  of current valueEstimate; already available)
+ *   searchValue: number          — visit-weighted mean Q at root; requires
+ *                                  a new field in main.py MoveResponse
+ *   positionType: PositionType   — computed in games.service.ts from the above
+ *   priorOnBestMove: number      — best candidate's prior; computable in
+ *                                  games.service.ts from candidates array
+ *   topMoveVisitShare: number    — best candidate's visitShare; same source
+ *   macroThreats: MacroThreatContext — computed in games.service.ts from
+ *                                  GameState + PV[1]
+ * ─────────────────────────────────────────────────────────────────────────
  */
 import type { GameState } from '@uttt/shared';
 import type { GameAnalysis } from '../games/games.service';

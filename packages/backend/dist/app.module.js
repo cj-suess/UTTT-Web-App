@@ -11,15 +11,6 @@ const common_1 = require("@nestjs/common");
 const app_controller_1 = require("./app.controller");
 const games_module_1 = require("./games/games.module");
 const config_1 = require("@nestjs/config");
-/**
- * Root module of the application. Modules are NestJS's unit of organization:
- * they bundle together the controllers, providers (services), and any
- * sub-modules that belong to a feature.
- *
- * `GamesModule` is imported here so its controller's routes are mounted on
- * the application. The DI container also walks imported modules to satisfy
- * dependencies across module boundaries.
- */
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;

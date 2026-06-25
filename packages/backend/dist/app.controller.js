@@ -11,15 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppController = void 0;
 const common_1 = require("@nestjs/common");
-/**
- * Top-level health-check controller. Exists mainly to give us something to
- * curl when verifying the server is alive.
- *
- * The `@Controller()` decorator (no path) means routes here are mounted at
- * the application root. `@Get('health')` registers a handler for
- * `GET /health`. NestJS reads these decorators at startup and builds the
- * routing table — there's no manual `app.get(...)` like in Express.
- */
+// health-check controller so we can verify the server is alive
 let AppController = class AppController {
     health() {
         return { status: 'ok' };

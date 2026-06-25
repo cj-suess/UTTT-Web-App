@@ -19,6 +19,7 @@ import {
   InferenceService,
 } from '../inference/inference.service';
 import { buildHintPrompt } from '../llm/prompt-builder';
+import { Difficulty } from './create-game.dto';
 
 // ---------------------------------------------------------------------------
 // Win-line lookup (used for macro threat detection)
@@ -38,6 +39,7 @@ export interface StoredGame {
   id: string;
   state: GameState;
   playerName: string;
+  difficulty: Difficulty;
   createdAt: Date;
   lastAnalysis: InferenceMoveResponse | null;
 }
@@ -131,17 +133,18 @@ export class GamesService {
 
   constructor(private readonly inferenceService: InferenceService) {}
 
-  create(playerName: string): StoredGame {
+  create(playerName: string, difficulty: Difficulty = 'hard'): StoredGame {
     const id = randomUUID();
     const game: StoredGame = {
       id,
       state: initialState(),
       playerName,
+      difficulty,
       createdAt: new Date(),
       lastAnalysis: null,
     };
     this.games.set(id, game);
-    this.logger.log('Game ID: ' + game.id, 'Player Name: ' + game.playerName);
+    this.logger.log(`Game ID: ${game.id}  Player: ${game.playerName}  Difficulty: ${game.difficulty}`);
     return game;
   }
 
@@ -168,7 +171,7 @@ export class GamesService {
     if (isTerminal(game.state))
       throw new BadRequestException('Game is already over');
 
-    const analysis = await this.inferenceService.getMove(game.state, sims);
+    const analysis = await this.inferenceService.getMove(game.state, sims, game.difficulty);
     const move: Move = analysis.best_move;
 
     if (!isLegalMove(game.state, move))
