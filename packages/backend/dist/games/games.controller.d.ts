@@ -15,6 +15,7 @@ import { Observable } from 'rxjs';
 export declare class GamesController {
     private readonly gamesService;
     private readonly llmService;
+    private readonly logger;
     constructor(gamesService: GamesService, llmService: LLMService);
     /** POST /games — create a fresh game and return it. */
     create(body: CreateGameDto): StoredGame;

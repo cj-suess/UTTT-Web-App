@@ -21,16 +21,19 @@ import {
 import { buildHintPrompt } from '../llm/prompt-builder';
 
 // ---------------------------------------------------------------------------
+// Win-line lookup (used for macro threat detection)
+// ---------------------------------------------------------------------------
+
+const WIN_LINES: readonly [number, number, number][] = [
+  [0, 1, 2], [3, 4, 5], [6, 7, 8],   // rows
+  [0, 3, 6], [1, 4, 7], [2, 5, 8],   // cols
+  [0, 4, 8], [2, 4, 6],              // diagonals
+];
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-/**
- * A game session as stored in the service.
- * For v1 this is in-memory only — restart the server and games disappear.
- *
- * `lastAnalysis` caches the full MCTS readout from the AI's most recent
- * move so the analysis endpoint can return it without re-running MCTS.
- */
 export interface StoredGame {
   id: string;
   state: GameState;
@@ -39,7 +42,6 @@ export interface StoredGame {
   lastAnalysis: InferenceMoveResponse | null;
 }
 
-/** Per-move breakdown, camelCase for the frontend. */
 export interface CandidateMoveAnalysis {
   move: [number, number];
   visits: number;
@@ -50,29 +52,78 @@ export interface CandidateMoveAnalysis {
 }
 
 /**
- * The full analysis of an AI move, ready for the frontend.
+ * Primary tactical pattern of the recommended move, detected from game state.
+ * Priority order: IMMEDIATE_WIN > BLOCK > FORK > FORK_BLOCK > CENTER_CONTROL
+ *                 > CORNER_PLAY > POSITIONAL
+ */
+export type MoveStrategy =
+  | 'IMMEDIATE_WIN'   // wins the micro-board in one move
+  | 'BLOCK'           // prevents O from winning the micro-board in one move
+  | 'FORK'            // creates two simultaneous winning threats O cannot both block
+  | 'FORK_BLOCK'      // prevents O from creating a fork
+  | 'CENTER_CONTROL'  // plays the center cell of the micro-board (index 4)
+  | 'CORNER_PLAY'     // plays a corner cell
+  | 'POSITIONAL';     // general positional move, no immediate tactical pattern
+
+/**
+ * Analysis of where the recommended move sends the opponent.
+ * UTTT-specific: the cell played determines the opponent's next board.
+ */
+export interface ConstraintAnalysis {
+  /** Destination board is won/drawn — O gets a free move anywhere. */
+  sendsToFreeMove: boolean;
+  /** O can win the destination board in a single move — a dangerous send. */
+  sendsToODanger: boolean;
+  /** X already has a two-in-a-row threat in the destination board — a favourable send. */
+  sendsToXStrong: boolean;
+}
+
+/**
+ * Position type derived from MCTS statistics.
  *
- * `winProbability` is derived from `valueEstimate` by mapping [-1, 1] to
- * [0, 1]: (valueEstimate + 1) / 2. A value of 0.5 means the position is
- * even; 0.7 means the player to move is expected to win 70% of the time.
+ * FORCED    — one move dominated search (>75% visits); alternatives were clearly worse.
+ * TACTICAL  — search significantly overruled the network's initial read; the best
+ *             move required deep calculation rather than pattern recognition.
+ * STRATEGIC — balanced position; several moves were reasonable; the winner is decided
+ *             on long-term positional grounds.
+ * DESPERATE — X has <30% winning chances; priority is damage limitation.
+ */
+export type PositionType = 'FORCED' | 'TACTICAL' | 'STRATEGIC' | 'DESPERATE';
+
+/**
+ * Macro-level threat flags computed from the game state and the recommended move.
+ */
+export interface MacroThreatContext {
+  xWinsMicroBoard: boolean;
+  xCreatesMacroThreat: boolean;
+  oHasMacroThreat: boolean;
+  blocksOThreat: boolean;
+}
+
+/**
+ * Full analysis of an AI move, ready for the frontend and the hint prompt.
  */
 export interface GameAnalysis {
   bestMove: [number, number];
   candidates: CandidateMoveAnalysis[];
+  networkValue: number;
+  searchValue: number;
   valueEstimate: number;
   winProbability: number;
   principalVariation: [number, number][];
   simsUsed: number;
+  positionType: PositionType;
+  priorOnBestMove: number;
+  topMoveVisitShare: number;
+  macroThreats: MacroThreatContext;
+  moveStrategy: MoveStrategy;
+  constraintAnalysis: ConstraintAnalysis;
 }
 
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
 
-/**
- * Owns the in-memory map of active games and all game-rule enforcement.
- * HTTP concerns belong in the controller; business rules live here.
- */
 @Injectable()
 export class GamesService {
   private readonly logger = new Logger(GamesService.name);
@@ -80,13 +131,12 @@ export class GamesService {
 
   constructor(private readonly inferenceService: InferenceService) {}
 
-  /** Create a fresh game and return it. */
   create(playerName: string): StoredGame {
     const id = randomUUID();
     const game: StoredGame = {
       id,
       state: initialState(),
-      playerName: playerName,
+      playerName,
       createdAt: new Date(),
       lastAnalysis: null,
     };
@@ -95,111 +145,296 @@ export class GamesService {
     return game;
   }
 
-  /** Look up an existing game by id. Throws 404 if not found. */
   findById(id: string): StoredGame {
     const game = this.games.get(id);
-    if (!game) {
-      throw new NotFoundException(`Game ${id} not found`);
-    }
+    if (!game) throw new NotFoundException(`Game ${id} not found`);
     return game;
   }
 
-  /**
-   * Apply a human move and return the updated game.
-   * Throws 400 if the game is over or the move is illegal.
-   */
   applyMove(id: string, move: Move): StoredGame {
     const game = this.findById(id);
-
-    if (isTerminal(game.state)) {
+    if (isTerminal(game.state))
       throw new BadRequestException('Game is already over');
-    }
-    if (!isLegalMove(game.state, move)) {
+    if (!isLegalMove(game.state, move))
       throw new BadRequestException(
         `Move [${move[0]}, ${move[1]}] is not legal in the current position`,
       );
-    }
-
     game.state = applyMove(game.state, move);
     return game;
   }
 
-  /**
-   * Ask the inference service for the best move, apply it, cache the full
-   * analysis, and return the updated game.
-   */
   async applyAiMove(id: string, sims?: number): Promise<StoredGame> {
     const game = this.findById(id);
-
-    if (isTerminal(game.state)) {
+    if (isTerminal(game.state))
       throw new BadRequestException('Game is already over');
-    }
 
     const analysis = await this.inferenceService.getMove(game.state, sims);
     const move: Move = analysis.best_move;
 
-    if (!isLegalMove(game.state, move)) {
+    if (!isLegalMove(game.state, move))
       throw new InternalServerErrorException(
         `Inference returned illegal move [${move}] — possible state encoding mismatch`,
       );
-    }
 
     game.state = applyMove(game.state, move);
     game.lastAnalysis = analysis;
     return game;
   }
 
-  /**
-   * Return the cached analysis from the AI's last move in this game.
-   * Throws 400 if the AI hasn't moved yet (nothing cached).
-   */
   getAnalysis(id: string): GameAnalysis {
     const game = this.findById(id);
-    if (!game.lastAnalysis) {
+    if (!game.lastAnalysis)
       throw new BadRequestException(
         'No analysis available yet — the AI needs to make at least one move first.',
       );
-    }
-    const prompt = buildHintPrompt(game.state, this.transformAnalysis(game.lastAnalysis));
-    this.logger.log('\n--- HINT PROMPT ---\n' + prompt + '\n---');
-    return this.transformAnalysis(game.lastAnalysis);
+    return this.buildAnalysis(game.lastAnalysis, game.state);
   }
 
-  /**
-   * Exposes the state + transformed analysis together so the controller doesn't need to know about the internal lastAnalysis type.
-   */
   getHintContext(id: string): { state: GameState; analysis: GameAnalysis } {
     const game = this.findById(id);
-    if (!game.lastAnalysis) {
+    if (!game.lastAnalysis)
       throw new BadRequestException(
         'No analysis available yet — the AI needs to make at least one move first.',
       );
-    }
     return {
       state: game.state,
-      analysis: this.transformAnalysis(game.lastAnalysis),
+      analysis: this.buildAnalysis(game.lastAnalysis, game.state),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Single entry-point for turning a raw inference response into a full
+   * GameAnalysis.  Both getAnalysis and getHintContext call this so that
+   * every consumer always receives the complete enriched struct.
+   */
+  private buildAnalysis(
+    raw: InferenceMoveResponse,
+    state: GameState,
+  ): GameAnalysis {
+    const candidates = raw.candidates.map((c) => ({
+      move: c.move as [number, number],
+      visits: c.visits,
+      visitShare: c.visit_share,
+      qValue: c.q_value,
+      prior: c.prior,
+      isBest: c.is_best,
+    }));
+
+    const best             = candidates.find((c) => c.isBest);
+    const networkValue     = raw.value_estimate;
+    // search_value is optional for backward compatibility with older inference
+    // server versions that pre-date this field.
+    const searchValue      = raw.search_value ?? networkValue;
+    const winProbability   = (networkValue + 1) / 2;
+    const topMoveVisitShare = best?.visitShare ?? 0;
+    const priorOnBestMove  = best?.prior ?? 0;
+    const xWinPct          = Math.round((1 - winProbability) * 100);
+
+    const positionType = this.classifyPosition(
+      xWinPct,
+      topMoveVisitShare,
+      networkValue,
+      searchValue,
+    );
+
+    const pv = raw.principal_variation as [number, number][];
+    const recommendedMove: [number, number] | null =
+      pv.length >= 2 ? pv[1] : null;
+
+    const macroThreats       = this.computeMacroThreats(state, recommendedMove);
+    const moveStrategy       = this.detectMoveStrategy(state, recommendedMove, macroThreats.xWinsMicroBoard);
+    const constraintAnalysis = this.detectConstraintAnalysis(state, recommendedMove);
+
+    return {
+      bestMove: raw.best_move as [number, number],
+      candidates,
+      networkValue,
+      searchValue,
+      valueEstimate: networkValue,
+      winProbability,
+      principalVariation: pv,
+      simsUsed: raw.sims_used,
+      positionType,
+      priorOnBestMove,
+      topMoveVisitShare,
+      macroThreats,
+      moveStrategy,
+      constraintAnalysis,
     };
   }
 
   /**
-   * Convert the snake_case inference response to camelCase for the frontend.
-   * Also derives `winProbability` from `valueEstimate` for convenience.
+   * Detect the primary tactical pattern of the recommended move.
+   * Checks are ordered by priority: immediate threats before positional concepts.
    */
-  private transformAnalysis(raw: InferenceMoveResponse): GameAnalysis {
-    return {
-      bestMove: raw.best_move,
-      candidates: raw.candidates.map((c) => ({
-        move: c.move,
-        visits: c.visits,
-        visitShare: c.visit_share,
-        qValue: c.q_value,
-        prior: c.prior,
-        isBest: c.is_best,
-      })),
-      valueEstimate: raw.value_estimate,
-      winProbability: (raw.value_estimate + 1) / 2,
-      principalVariation: raw.principal_variation,
-      simsUsed: raw.sims_used,
+  private detectMoveStrategy(
+    state: GameState,
+    recommendedMove: [number, number] | null,
+    xWinsMicroBoard: boolean,
+  ): MoveStrategy {
+    if (!recommendedMove) return 'POSITIONAL';
+
+    const [xMacro, xCell] = recommendedMove;
+    const board = state.board as number[];
+    const micro = Array.from({ length: 9 }, (_, i) => board[xMacro * 9 + i]);
+
+    if (micro[xCell] !== 0) return 'POSITIONAL';
+
+    // IMMEDIATE_WIN — already computed in macroThreats
+    if (xWinsMicroBoard) return 'IMMEDIATE_WIN';
+
+    // BLOCK — would O win this micro-board if they played here instead?
+    const oTest = [...micro];
+    oTest[xCell] = -1;
+    if (WIN_LINES.some(([a, b, c]) => oTest[a] === -1 && oTest[b] === -1 && oTest[c] === -1))
+      return 'BLOCK';
+
+    // FORK — does X playing here create two or more simultaneous winning threats?
+    const xTest = [...micro];
+    xTest[xCell] = 1;
+    const xThreats = WIN_LINES.filter(([a, b, c]) => {
+      const v = [xTest[a], xTest[b], xTest[c]];
+      return v.filter(x => x === 1).length === 2 && v.filter(x => x === 0).length === 1;
+    }).length;
+    if (xThreats >= 2) return 'FORK';
+
+    // FORK_BLOCK — would O playing here create a fork for O?
+    const oFork = [...micro];
+    oFork[xCell] = -1;
+    const oThreats = WIN_LINES.filter(([a, b, c]) => {
+      const v = [oFork[a], oFork[b], oFork[c]];
+      return v.filter(x => x === -1).length === 2 && v.filter(x => x === 0).length === 1;
+    }).length;
+    if (oThreats >= 2) return 'FORK_BLOCK';
+
+    if (xCell === 4) return 'CENTER_CONTROL';
+    if ([0, 2, 6, 8].includes(xCell)) return 'CORNER_PLAY';
+    return 'POSITIONAL';
+  }
+
+  /**
+   * Analyse the constraint consequence of the recommended move —
+   * i.e. which board O is sent to and how favourable that destination is.
+   */
+  private detectConstraintAnalysis(
+    state: GameState,
+    recommendedMove: [number, number] | null,
+  ): ConstraintAnalysis {
+    const empty: ConstraintAnalysis = {
+      sendsToFreeMove: false,
+      sendsToODanger: false,
+      sendsToXStrong: false,
     };
+    if (!recommendedMove) return empty;
+
+    const [, xCell] = recommendedMove;   // destination board = xCell
+    const macro  = state.macro as number[];
+    const board  = state.board as number[];
+
+    // Destination already decided → O gets a free move
+    if (macro[xCell] !== 0) return { ...empty, sendsToFreeMove: true };
+
+    const dest = Array.from({ length: 9 }, (_, i) => board[xCell * 9 + i]);
+
+    // Can O win the destination board in one move?
+    const sendsToODanger = dest.some((v, i) => {
+      if (v !== 0) return false;
+      const t = [...dest]; t[i] = -1;
+      return WIN_LINES.some(([a, b, c]) => t[a] === -1 && t[b] === -1 && t[c] === -1);
+    });
+
+    // Does X already have a two-in-a-row threat in the destination board?
+    const sendsToXStrong = WIN_LINES.some(([a, b, c]) => {
+      const v = [dest[a], dest[b], dest[c]];
+      return v.filter(x => x === 1).length === 2 && v.filter(x => x === 0).length === 1;
+    });
+
+    return { sendsToFreeMove: false, sendsToODanger, sendsToXStrong };
+  }
+   /* Priority order matters: DESPERATE overrides everything (the losing-position
+   * framing should always dominate), FORCED is checked next because a position
+   * can be simultaneously forced and tactical, and TACTICAL/STRATEGIC are
+   * distinguished by the network-search gap.
+   */
+  private classifyPosition(
+    xWinPct: number,
+    topMoveVisitShare: number,
+    networkValue: number,
+    searchValue: number,
+  ): PositionType {
+    if (xWinPct < 30)              return 'DESPERATE';
+    if (topMoveVisitShare > 0.75)  return 'FORCED';
+    if (Math.abs(networkValue - searchValue) > 0.15) return 'TACTICAL';
+    return 'STRATEGIC';
+  }
+
+  /**
+   * Compute macro-level threat flags using the current game state and the
+   * recommended move (PV[1]).
+   *
+   * All checks use pure game-rule logic — no network inference required.
+   * player=1 is X (the human player whose recommended move we are analysing).
+   */
+  private computeMacroThreats(
+    state: GameState,
+    recommendedMove: [number, number] | null,
+  ): MacroThreatContext {
+    const empty: MacroThreatContext = {
+      xWinsMicroBoard: false,
+      xCreatesMacroThreat: false,
+      oHasMacroThreat: false,
+      blocksOThreat: false,
+    };
+    if (!recommendedMove) return empty;
+
+    const [xMacro, xCell] = recommendedMove;
+    const board = state.board as number[];
+    const macro = state.macro as number[];
+
+    // 1. Would placing X at (xMacro, xCell) win the micro-board?
+    const testBoard = [...board];
+    testBoard[xMacro * 9 + xCell] = 1;   // 1 = X
+    const micro = testBoard.slice(xMacro * 9, xMacro * 9 + 9);
+    const xWinsMicroBoard = WIN_LINES.some(
+      ([a, b, c]) => micro[a] === 1 && micro[b] === 1 && micro[c] === 1,
+    );
+
+    // 2. Winning that micro-board: does X get two-in-a-row at the macro level?
+    let xCreatesMacroThreat = false;
+    if (xWinsMicroBoard) {
+      const testMacro = [...macro];
+      testMacro[xMacro] = 1;
+      xCreatesMacroThreat = WIN_LINES.some(([a, b, c]) => {
+        const v = [testMacro[a], testMacro[b], testMacro[c]];
+        return v.filter(x => x === 1).length === 2 &&
+               v.filter(x => x === 0).length === 1;
+      });
+    }
+
+    // 3. Does O currently have two-in-a-row at the macro level?
+    const oHasMacroThreat = WIN_LINES.some(([a, b, c]) => {
+      const v = [macro[a], macro[b], macro[c]];
+      return v.filter(x => x === -1).length === 2 &&
+             v.filter(x => x === 0).length === 1;
+    });
+
+    // 4. Would winning xMacro remove O's macro threat?
+    let blocksOThreat = false;
+    if (xWinsMicroBoard && oHasMacroThreat) {
+      const testMacro = [...macro];
+      testMacro[xMacro] = 1;
+      const oStillThreatens = WIN_LINES.some(([a, b, c]) => {
+        const v = [testMacro[a], testMacro[b], testMacro[c]];
+        return v.filter(x => x === -1).length === 2 &&
+               v.filter(x => x === 0).length === 1;
+      });
+      blocksOThreat = !oStillThreatens;
+    }
+
+    return { xWinsMicroBoard, xCreatesMacroThreat, oHasMacroThreat, blocksOThreat };
   }
 }

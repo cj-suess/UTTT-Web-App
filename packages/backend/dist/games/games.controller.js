@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var GamesController_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GamesController = void 0;
 const common_1 = require("@nestjs/common");
@@ -29,9 +30,10 @@ const rxjs_1 = require("rxjs");
  * this controller needs a `GamesService` and supplies the singleton
  * instance automatically — we never write `new GamesService()` ourselves.
  */
-let GamesController = class GamesController {
+let GamesController = GamesController_1 = class GamesController {
     gamesService;
     llmService;
+    logger = new common_2.Logger(GamesController_1.name);
     constructor(gamesService, llmService) {
         this.gamesService = gamesService;
         this.llmService = llmService;
@@ -74,6 +76,7 @@ let GamesController = class GamesController {
             (async () => {
                 const { state, analysis } = this.gamesService.getHintContext(id);
                 const prompt = (0, prompt_builder_1.buildHintPrompt)(state, analysis);
+                this.logger.log('\n--- HINT PROMPT ---\n' + prompt + '\n---');
                 if (!prompt) {
                     subscriber.error(new common_1.BadRequestException('Insufficient data to generate a hint.'));
                     return;
@@ -132,7 +135,7 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", rxjs_1.Observable)
 ], GamesController.prototype, "hintStream", null);
-exports.GamesController = GamesController = __decorate([
+exports.GamesController = GamesController = GamesController_1 = __decorate([
     (0, common_1.Controller)('games'),
     __metadata("design:paramtypes", [games_service_1.GamesService,
         llm_service_1.LLMService])

@@ -4,7 +4,7 @@ import { GameAnalysis, GamesService, StoredGame } from './games.service';
 import { CreateGameDto } from './create-game.dto';
 import { buildHintPrompt } from '../llm/prompt-builder';
 import { LLMService } from '../llm/llm.service';
-import { MessageEvent, Sse } from '@nestjs/common';
+import { MessageEvent, Sse, Logger } from '@nestjs/common';
 import { Observable } from 'rxjs';
 
 /**
@@ -17,6 +17,7 @@ import { Observable } from 'rxjs';
  */
 @Controller('games')
 export class GamesController {
+  private readonly logger = new Logger(GamesController.name);
   constructor(
     private readonly gamesService: GamesService,
     private readonly llmService: LLMService,
@@ -78,7 +79,7 @@ export class GamesController {
       (async () => {
         const { state, analysis } = this.gamesService.getHintContext(id);
         const prompt = buildHintPrompt(state, analysis);
-
+        this.logger.log('\n--- HINT PROMPT ---\n' + prompt + '\n---');
         if (!prompt) {
           subscriber.error(
             new BadRequestException('Insufficient data to generate a hint.'),

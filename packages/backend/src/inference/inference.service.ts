@@ -6,10 +6,7 @@ import {
 } from '@nestjs/common';
 import { GameState } from '@uttt/shared';
 
-// ---------------------------------------------------------------------------
-// Response types from the Python inference service (snake_case wire format).
-// These match the Pydantic models defined in inference/main.py.
-// ---------------------------------------------------------------------------
+// response types from the inference service
 
 export interface InferenceCandidateMove {
   move: [number, number];
@@ -26,31 +23,26 @@ export interface InferenceMoveResponse {
   value_estimate: number;
   principal_variation: [number, number][];
   sims_used: number;
+  search_value: number;
 }
-
-// ---------------------------------------------------------------------------
-// Service
-// ---------------------------------------------------------------------------
 
 @Injectable()
 export class InferenceService {
   private readonly logger = new Logger(InferenceService.name);
-  /** Base URL of the Python inference service. Override via env var. */
+  // base URL of the inference service (override via env var)
   private readonly baseUrl =
     process.env['INFERENCE_URL'] ?? 'http://localhost:8000';
 
   /**
-   * Ask the inference service for the best move from the given state.
-   *
-   * Returns the full MCTS analysis (visit counts, Q-values, principal
-   * variation) so callers can store it for the learning-mode endpoint.
-   *
-   * @param state  Current game state to analyse.
-   * @param sims   Number of MCTS simulations. Lower = faster but weaker.
+   * ask the inference service for the best move from the given state
+   * this will return the full MCTS analysis (visit counts, Q-values, principal
+   * variation) so it can be stored for the hint endpoint
+   * 
+   * @param state  current game state to analyze
+   * @param sims   number of MCTS simulations
    */
   async getMove(state: GameState, sims = 400): Promise<InferenceMoveResponse> {
-    // Translate from camelCase (NestJS / @uttt/shared convention) to
-    // snake_case (Python / FastAPI convention) before sending.
+    // translate from camelCase (NestJS/@uttt/shared) to snake_case (python/FastAPI) before sending
     const body = {
       state: {
         board: [...state.board],
@@ -72,7 +64,6 @@ export class InferenceService {
       const elapsed = Date.now() - start
       this.logger.log(`Inference call completed in ${elapsed}ms`)
     } catch {
-      // fetch() itself throws on network failure (service not running, wrong port, etc.)
       throw new ServiceUnavailableException(
         `Inference service unreachable at ${this.baseUrl}. Is it running?`,
       );
@@ -84,10 +75,7 @@ export class InferenceService {
         `Inference service error ${response.status}: ${detail}`,
       );
     }
-
-    // The JSON already has snake_case field names; we expose them as-is so
-    // consumers can decide how to present them. The analysis endpoint (step 8)
-    // will do any camelCase conversion before forwarding to the frontend.
+    
     return response.json() as Promise<InferenceMoveResponse>;
   }
 }

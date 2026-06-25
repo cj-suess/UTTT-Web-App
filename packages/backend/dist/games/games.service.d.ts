@@ -1,12 +1,5 @@
 import { GameState, Move } from '@uttt/shared';
 import { InferenceMoveResponse, InferenceService } from '../inference/inference.service';
-/**
- * A game session as stored in the service.
- * For v1 this is in-memory only — restart the server and games disappear.
- *
- * `lastAnalysis` caches the full MCTS readout from the AI's most recent
- * move so the analysis endpoint can return it without re-running MCTS.
- */
 export interface StoredGame {
     id: string;
     state: GameState;
@@ -14,7 +7,6 @@ export interface StoredGame {
     createdAt: Date;
     lastAnalysis: InferenceMoveResponse | null;
 }
-/** Per-move breakdown, camelCase for the frontend. */
 export interface CandidateMoveAnalysis {
     move: [number, number];
     visits: number;
@@ -24,58 +16,100 @@ export interface CandidateMoveAnalysis {
     isBest: boolean;
 }
 /**
- * The full analysis of an AI move, ready for the frontend.
+ * Primary tactical pattern of the recommended move, detected from game state.
+ * 
+ * Priority order: 
+ *      IMMEDIATE_WIN > BLOCK > FORK > FORK_BLOCK > CENTER_CONTROL > CORNER_PLAY > POSITIONAL
+ */
+export type MoveStrategy = 'IMMEDIATE_WIN' | 'BLOCK' | 'FORK' | 'FORK_BLOCK' | 'CENTER_CONTROL' | 'CORNER_PLAY' | 'POSITIONAL';
+/**
+ * Analysis of where the recommended move sends the opponent.
+ * UTTT-specific: the cell played determines the opponent's next board.
+ */
+export interface ConstraintAnalysis {
+    /** Destination board is won/drawn — O gets a free move anywhere. */
+    sendsToFreeMove: boolean;
+    /** O can win the destination board in a single move — a dangerous send. */
+    sendsToODanger: boolean;
+    /** X already has a two-in-a-row threat in the destination board — a favourable send. */
+    sendsToXStrong: boolean;
+}
+/**
+ * Position type derived from MCTS statistics.
  *
- * `winProbability` is derived from `valueEstimate` by mapping [-1, 1] to
- * [0, 1]: (valueEstimate + 1) / 2. A value of 0.5 means the position is
- * even; 0.7 means the player to move is expected to win 70% of the time.
+ * FORCED    — one move dominated search (>75% visits); alternatives were clearly worse.
+ * TACTICAL  — search significantly overruled the network's initial read; the best
+ *             move required deep calculation rather than pattern recognition.
+ * STRATEGIC — balanced position; several moves were reasonable; the winner is decided
+ *             on long-term positional grounds.
+ * DESPERATE — X has <30% winning chances; priority is damage limitation.
+ */
+export type PositionType = 'FORCED' | 'TACTICAL' | 'STRATEGIC' | 'DESPERATE';
+/**
+ * Macro-level threat flags computed from the game state and the recommended move.
+ */
+export interface MacroThreatContext {
+    xWinsMicroBoard: boolean;
+    xCreatesMacroThreat: boolean;
+    oHasMacroThreat: boolean;
+    blocksOThreat: boolean;
+}
+/**
+ * Full analysis of an AI move, ready for the frontend and the hint prompt.
  */
 export interface GameAnalysis {
     bestMove: [number, number];
     candidates: CandidateMoveAnalysis[];
+    networkValue: number;
+    searchValue: number;
     valueEstimate: number;
     winProbability: number;
     principalVariation: [number, number][];
     simsUsed: number;
+    positionType: PositionType;
+    priorOnBestMove: number;
+    topMoveVisitShare: number;
+    macroThreats: MacroThreatContext;
+    moveStrategy: MoveStrategy;
+    constraintAnalysis: ConstraintAnalysis;
 }
-/**
- * Owns the in-memory map of active games and all game-rule enforcement.
- * HTTP concerns belong in the controller; business rules live here.
- */
 export declare class GamesService {
     private readonly inferenceService;
     private readonly logger;
     private readonly games;
     constructor(inferenceService: InferenceService);
-    /** Create a fresh game and return it. */
     create(playerName: string): StoredGame;
-    /** Look up an existing game by id. Throws 404 if not found. */
     findById(id: string): StoredGame;
-    /**
-     * Apply a human move and return the updated game.
-     * Throws 400 if the game is over or the move is illegal.
-     */
     applyMove(id: string, move: Move): StoredGame;
-    /**
-     * Ask the inference service for the best move, apply it, cache the full
-     * analysis, and return the updated game.
-     */
     applyAiMove(id: string, sims?: number): Promise<StoredGame>;
-    /**
-     * Return the cached analysis from the AI's last move in this game.
-     * Throws 400 if the AI hasn't moved yet (nothing cached).
-     */
     getAnalysis(id: string): GameAnalysis;
-    /**
-     * Exposes the state + transformed analysis together so the controller doesn't need to know about the internal lastAnalysis type.
-     */
     getHintContext(id: string): {
         state: GameState;
         analysis: GameAnalysis;
     };
     /**
-     * Convert the snake_case inference response to camelCase for the frontend.
-     * Also derives `winProbability` from `valueEstimate` for convenience.
+     * Single entry-point for turning a raw inference response into a full
+     * GameAnalysis.  Both getAnalysis and getHintContext call this so that
+     * every consumer always receives the complete enriched struct.
      */
-    private transformAnalysis;
+    private buildAnalysis;
+    /**
+     * Detect the primary tactical pattern of the recommended move.
+     * Checks are ordered by priority: immediate threats before positional concepts.
+     */
+    private detectMoveStrategy;
+    /**
+     * Analyse the constraint consequence of the recommended move —
+     * i.e. which board O is sent to and how favourable that destination is.
+     */
+    private detectConstraintAnalysis;
+    private classifyPosition;
+    /**
+     * Compute macro-level threat flags using the current game state and the
+     * recommended move (PV[1]).
+     *
+     * All checks use pure game-rule logic — no network inference required.
+     * player=1 is X (the human player whose recommended move we are analysing).
+     */
+    private computeMacroThreats;
 }

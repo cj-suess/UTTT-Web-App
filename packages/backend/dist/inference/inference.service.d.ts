@@ -13,6 +13,7 @@ export interface InferenceMoveResponse {
     value_estimate: number;
     principal_variation: [number, number][];
     sims_used: number;
+    search_value: number;
 }
 export declare class InferenceService {
     private readonly logger;

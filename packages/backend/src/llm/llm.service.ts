@@ -28,7 +28,7 @@ export class LLMService {
    * @param prompt  The formatted game context from buildHintPrompt().
    */
   async *streamHint(prompt: string): AsyncGenerator<string> {
-    this.logger.log('Streaming hint from Claude Haiku...');
+    this.logger.log('Streaming hint from Claude...');
 
     const stream = await this.client.messages.create({
       model: 'claude-haiku-4-5-20251001',
