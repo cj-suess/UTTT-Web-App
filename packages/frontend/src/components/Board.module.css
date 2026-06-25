@@ -80,7 +80,7 @@
 
 .macroX    { background: rgba(232, 197, 71, 0.10); }
 .macroO    { background: rgba(91,  156, 246, 0.10); }
-.macroDraw { background: rgba(76, 175, 80, 0.08); }
+.macroDraw { background: rgba(255, 255, 255, 0.04); }
 
 /* ─── Symbols ────────────────────────────────────────────────────────────── */
 
@@ -93,4 +93,23 @@
   width: 72%;
   height: 72%;
   opacity: 0.85;
+}
+
+/* ─── Hint cell flash ────────────────────────────────────────────────────────
+   Flashes 3 times with the brand green then settles to a subtle tint.
+   animation-fill-mode: forwards keeps the final (settled) background.        */
+
+@keyframes hintFlash {
+  0%   { background: var(--bg-elevated); }
+  12%  { background: rgba(57, 255, 20, 0.35); }
+  24%  { background: var(--bg-elevated); }
+  40%  { background: rgba(57, 255, 20, 0.35); }
+  56%  { background: var(--bg-elevated); }
+  72%  { background: rgba(57, 255, 20, 0.35); }
+  88%  { background: var(--bg-elevated); }
+  100% { background: rgba(57, 255, 20, 0.12); }
+}
+
+.cellHinted {
+  animation: hintFlash 1.6s ease-in-out forwards;
 }

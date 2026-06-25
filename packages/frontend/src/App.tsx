@@ -10,6 +10,8 @@ export default function App() {
   const [playerName, setPlayerName] = useState('')
   const [showPrompt, setShowPrompt] = useState(false)
   const [showConfirm, setConfirm] = useState(false)
+  const [hintedMove, setHintedMove] = useState<[number, number] | null>(null)
+  const [hintKey, setHintKey] = useState(0)
 
   function statusText(): string {
     if (error) return error
@@ -36,7 +38,7 @@ export default function App() {
   function renderBoardArea() {
     if(game) {
       return(
-        <Board state={game.state} onMove={playMove} disabled={loading}/>
+        <Board state={game.state} onMove={playMove} disabled={loading} hintMove={hintedMove} hintKey={hintKey}/>
       )
     }
     if(showPrompt) {
@@ -145,6 +147,11 @@ export default function App() {
               isHumanTurn={game.state.player === 1 && !isTerminal(game.state) && !loading}
               analysis={analysis}
               moveCount={game.state.board.filter(c => c !== 0).length}
+              onHintStart={move => {
+                setHintedMove(move)
+                setHintKey(k => k + 1)
+              }}
+              onHintClear={() => setHintedMove(null)}
             />
           )}
         </div>

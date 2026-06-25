@@ -1,27 +1,16 @@
-/**
- * HintPanel — the learning feature panel rendered on the right side.
- *
- * Uses the browser's native EventSource API to consume the SSE stream from
- * GET /api/games/:id/hint. Tokens arrive and are appended to the hint text
- * as they stream in, giving a typewriter effect.
- *
- * The hint is cleared whenever moveCount changes (i.e. a move was made)
- * because the previous hint is now stale.
- */
-
 import { useEffect, useRef, useState } from 'react'
 import type { GameAnalysis } from '../api/client'
 import styles from './HintPanel.module.css'
 
 interface HintPanelProps {
   gameId: string
-  /** True only when it's the human's turn, game isn't over, and AI isn't thinking. */
   isHumanTurn: boolean
-  /** Null until the AI has made at least one move. */
   analysis: GameAnalysis | null
-  /** Derived from the number of pieces on the board. Changes on every move
-   *  and is used to clear the stale hint. */
   moveCount: number
+  /** Called immediately when GET HINT is clicked with the recommended [macro, cell]. */
+  onHintStart?: (move: [number, number]) => void
+  /** Called when the hint is cleared (move made or new game). */
+  onHintClear?: () => void
 }
 
 export function HintPanel({
@@ -29,22 +18,23 @@ export function HintPanel({
   isHumanTurn,
   analysis,
   moveCount,
+  onHintStart,
+  onHintClear,
 }: HintPanelProps) {
   const [hint, setHint] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  // Keep a ref to the active EventSource so we can close it on cleanup.
   const esRef = useRef<EventSource | null>(null)
+  const hasReceivedContent = useRef(false)
 
-  // Clear the hint whenever the board changes — the position has moved on.
+  // Clear hint and board highlight whenever a move is made.
   useEffect(() => {
     setHint('')
     setError(null)
     closeStream()
+    onHintClear?.()
   }, [moveCount])
 
-  // Cleanup on unmount.
   useEffect(() => {
     return () => closeStream()
   }, [])
@@ -57,30 +47,30 @@ export function HintPanel({
     setIsStreaming(false)
   }
 
-  const hasReceivedContent = useRef(false)
-
   function getHint() {
-    if (isStreaming) return
+    if (isStreaming || !analysis) return
+
+    // Notify parent immediately so the board can start the flash animation
+    // before the first token arrives.
+    const pv = analysis.principalVariation
+    if (pv.length >= 2) {
+      onHintStart?.(pv[1] as [number, number])
+    }
+
     setHint('')
     setError(null)
     setIsStreaming(true)
-
     hasReceivedContent.current = false
 
-    // EventSource automatically sends a GET request and keeps the connection
-    // open. The Vite proxy forwards /api/* to NestJS on port 3000.
     const es = new EventSource(`/api/games/${gameId}/hint`)
     esRef.current = es
 
     es.onmessage = (event: MessageEvent) => {
-      hasReceivedContent.current = true
       const data = JSON.parse(event.data as string) as { token: string }
+      hasReceivedContent.current = true
       setHint(prev => prev + data.token)
     }
 
-    // onerror fires both when the stream ends normally (server closes) and
-    // on a real network error. In both cases we stop streaming — if there's
-    // real content in `hint` the user can read it; if not, show an error.
     es.onerror = () => {
       if (!hasReceivedContent.current) {
         setError('Could not reach the hint service.')
@@ -111,9 +101,7 @@ export function HintPanel({
       </div>
 
       <div className={styles.content}>
-        {error && (
-          <p className={styles.error}>{error}</p>
-        )}
+        {error && <p className={styles.error}>{error}</p>}
         {hint ? (
           <p className={styles.hintText}>{hint}</p>
         ) : (
