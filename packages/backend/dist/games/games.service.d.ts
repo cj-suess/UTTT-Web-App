@@ -8,6 +8,7 @@ export interface StoredGame {
     difficulty: Difficulty;
     createdAt: Date;
     lastAnalysis: InferenceMoveResponse | null;
+    hintsUsed: number;
 }
 export interface CandidateMoveAnalysis {
     move: [number, number];

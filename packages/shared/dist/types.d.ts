@@ -42,5 +42,7 @@ export declare const X: Player;
 export declare const O: Player;
 export declare const EMPTY: 0;
 export declare const DRAW: 2;
+/** Maximum number of hints a player may request per game. */
+export declare const HINT_LIMIT = 3;
 /** All eight winning lines on a 3x3 grid (rows, columns, diagonals). */
 export declare const WIN_LINES: readonly (readonly [number, number, number])[];

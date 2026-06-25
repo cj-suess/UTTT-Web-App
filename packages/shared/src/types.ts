@@ -51,6 +51,9 @@ export const O: Player = -1;
 export const EMPTY = 0 as const;
 export const DRAW = 2 as const;
 
+/** Maximum number of hints a player may request per game. */
+export const HINT_LIMIT = 3;
+
 /** All eight winning lines on a 3x3 grid (rows, columns, diagonals). */
 export const WIN_LINES: readonly (readonly [number, number, number])[] = [
   [0, 1, 2], [3, 4, 5], [6, 7, 8],   // rows

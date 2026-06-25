@@ -9,12 +9,14 @@
  * backend, and the frontend without any reinterpretation.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WIN_LINES = exports.DRAW = exports.EMPTY = exports.O = exports.X = void 0;
+exports.WIN_LINES = exports.HINT_LIMIT = exports.DRAW = exports.EMPTY = exports.O = exports.X = void 0;
 // --- Named constants for readability ------------------------------------
 exports.X = 1;
 exports.O = -1;
 exports.EMPTY = 0;
 exports.DRAW = 2;
+/** Maximum number of hints a player may request per game. */
+exports.HINT_LIMIT = 3;
 /** All eight winning lines on a 3x3 grid (rows, columns, diagonals). */
 exports.WIN_LINES = [
     [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows

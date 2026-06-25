@@ -42,6 +42,7 @@ let GamesService = GamesService_1 = class GamesService {
             difficulty,
             createdAt: new Date(),
             lastAnalysis: null,
+            hintsUsed: 0,
         };
         this.games.set(id, game);
         this.logger.log(`Game ID: ${game.id}  Player: ${game.playerName}  Difficulty: ${game.difficulty}`);
@@ -84,6 +85,9 @@ let GamesService = GamesService_1 = class GamesService {
         const game = this.findById(id);
         if (!game.lastAnalysis)
             throw new common_1.BadRequestException('No analysis available yet — the AI needs to make at least one move first.');
+        if (game.hintsUsed >= shared_1.HINT_LIMIT)
+            throw new common_1.ForbiddenException(`Hint limit reached (${shared_1.HINT_LIMIT} per game).`);
+        game.hintsUsed++;
         return {
             state: game.state,
             analysis: this.buildAnalysis(game.lastAnalysis, game.state),

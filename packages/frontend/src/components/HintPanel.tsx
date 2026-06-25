@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { HINT_LIMIT } from '@uttt/shared'
 import type { GameAnalysis } from '../api/client'
 import styles from './HintPanel.module.css'
-
-const HINT_LIMIT = 3
 
 interface HintPanelProps {
   gameId: string

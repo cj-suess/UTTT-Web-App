@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import {
   applyMove,
   GameState,
+  HINT_LIMIT,
   initialState,
   isLegalMove,
   isTerminal,
@@ -202,8 +203,8 @@ export class GamesService {
       throw new BadRequestException(
         'No analysis available yet — the AI needs to make at least one move first.',
       );
-    if (game.hintsUsed >= 3)
-      throw new ForbiddenException('Hint limit reached (3 per game).');
+    if (game.hintsUsed >= HINT_LIMIT)
+      throw new ForbiddenException(`Hint limit reached (${HINT_LIMIT} per game).`);
     game.hintsUsed++;
     return {
       state: game.state,
