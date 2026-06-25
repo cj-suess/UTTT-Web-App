@@ -19,7 +19,7 @@ const DIFFICULTY_COLORS: Record<Difficulty, string> = {
 }
 
 export default function App() {
-  const { game, analysis, loading, error, createGame, playMove } = useGame()
+  const { game, analysis, loading, error, hintsUsed, createGame, playMove, recordHintUsed } = useGame()
   const [playerName, setPlayerName] = useState('')
   const [difficulty, setDifficulty] = useState<Difficulty>('hard')
   const [showPrompt, setShowPrompt] = useState(false)
@@ -186,11 +186,13 @@ export default function App() {
               isHumanTurn={game.state.player === 1 && !isTerminal(game.state) && !loading}
               analysis={analysis}
               moveCount={game.state.board.filter(c => c !== 0).length}
+              hintsUsed={hintsUsed}
               onHintStart={move => {
                 setHintedMove(move)
                 setHintKey(k => k + 1)
               }}
               onHintClear={() => setHintedMove(null)}
+              onHintUsed={recordHintUsed}
             />
           )}
         </div>

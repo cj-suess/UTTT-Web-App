@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -42,6 +43,7 @@ export interface StoredGame {
   difficulty: Difficulty;
   createdAt: Date;
   lastAnalysis: InferenceMoveResponse | null;
+  hintsUsed: number;
 }
 
 export interface CandidateMoveAnalysis {
@@ -142,6 +144,7 @@ export class GamesService {
       difficulty,
       createdAt: new Date(),
       lastAnalysis: null,
+      hintsUsed: 0,
     };
     this.games.set(id, game);
     this.logger.log(`Game ID: ${game.id}  Player: ${game.playerName}  Difficulty: ${game.difficulty}`);
@@ -199,6 +202,9 @@ export class GamesService {
       throw new BadRequestException(
         'No analysis available yet — the AI needs to make at least one move first.',
       );
+    if (game.hintsUsed >= 3)
+      throw new ForbiddenException('Hint limit reached (3 per game).');
+    game.hintsUsed++;
     return {
       state: game.state,
       analysis: this.buildAnalysis(game.lastAnalysis, game.state),

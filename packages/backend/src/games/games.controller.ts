@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApplyMoveDto } from './apply-move.dto';
 import { GameAnalysis, GamesService, StoredGame } from './games.service';
 import { CreateGameDto } from './create-game.dto';
@@ -74,6 +75,7 @@ export class GamesController {
 
   @Get(':id/hint')
   @Sse()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   hintStream(@Param('id') id: string): Observable<MessageEvent> {
     return new Observable(subscriber => {
       (async () => {

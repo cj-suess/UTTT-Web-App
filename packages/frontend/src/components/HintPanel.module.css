@@ -17,11 +17,24 @@
   border-bottom: 1px solid var(--border);
 }
 
+.titleRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .title {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.2em;
   color: var(--text-muted);
+}
+
+.counter {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  opacity: 0.6;
 }
 
 /* ─── Button ─────────────────────────────────────────────────────────────── */

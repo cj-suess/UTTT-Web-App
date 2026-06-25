@@ -22,6 +22,7 @@ interface State {
   analysis: GameAnalysis | null;
   loading: boolean;
   error: string | null;
+  hintsUsed: number;
 }
 
 const INITIAL: State = {
@@ -29,6 +30,7 @@ const INITIAL: State = {
   analysis: null,
   loading: false,
   error: null,
+  hintsUsed: 0,
 };
 
 export function useGame() {
@@ -55,10 +57,14 @@ export function useGame() {
     begin();
     try {
       const game = await api.createGame(playerName, difficulty);
-      setState({ game, analysis: null, loading: false, error: null });
+      setState({ game, analysis: null, loading: false, error: null, hintsUsed: 0 });
     } catch (e) {
       fail(e);
     }
+  }
+
+  function recordHintUsed() {
+    setState(s => ({ ...s, hintsUsed: s.hintsUsed + 1 }));
   }
 
   /**
@@ -104,7 +110,9 @@ export function useGame() {
     analysis: state.analysis,
     loading: state.loading,
     error: state.error,
+    hintsUsed: state.hintsUsed,
     createGame,
     playMove,
+    recordHintUsed,
   };
 }

@@ -2,15 +2,20 @@ import { useEffect, useRef, useState } from 'react'
 import type { GameAnalysis } from '../api/client'
 import styles from './HintPanel.module.css'
 
+const HINT_LIMIT = 3
+
 interface HintPanelProps {
   gameId: string
   isHumanTurn: boolean
   analysis: GameAnalysis | null
   moveCount: number
+  hintsUsed: number
   /** Called immediately when GET HINT is clicked with the recommended [macro, cell]. */
   onHintStart?: (move: [number, number]) => void
   /** Called when the hint is cleared (move made or new game). */
   onHintClear?: () => void
+  /** Called when a hint is successfully streamed. */
+  onHintUsed?: () => void
 }
 
 export function HintPanel({
@@ -18,8 +23,10 @@ export function HintPanel({
   isHumanTurn,
   analysis,
   moveCount,
+  hintsUsed,
   onHintStart,
   onHintClear,
+  onHintUsed,
 }: HintPanelProps) {
   const [hint, setHint] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -74,23 +81,30 @@ export function HintPanel({
     es.onerror = () => {
       if (!hasReceivedContent.current) {
         setError('Could not reach the hint service.')
+      } else {
+        onHintUsed?.()
       }
       closeStream()
     }
   }
 
-  const canGetHint = isHumanTurn && analysis !== null && !isStreaming
+  const hintsRemaining = HINT_LIMIT - hintsUsed
+  const canGetHint = isHumanTurn && analysis !== null && !isStreaming && hintsRemaining > 0
 
   const placeholderText = () => {
     if (!analysis) return 'Available after the AI makes its first move.'
     if (!isHumanTurn) return 'Available on your turn.'
+    if (hintsRemaining <= 0) return 'No hints remaining for this game.'
     return 'Click GET HINT for move guidance.'
   }
 
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
-        <span className={styles.title}>HINT</span>
+        <div className={styles.titleRow}>
+          <span className={styles.title}>HINT</span>
+          <span className={styles.counter}>{hintsRemaining} / {HINT_LIMIT}</span>
+        </div>
         <button
           className={styles.hintBtn}
           onClick={getHint}

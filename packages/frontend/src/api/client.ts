@@ -40,6 +40,7 @@ export interface GameResponse {
   playerName: string;
   difficulty: Difficulty;
   createdAt: string;
+  hintsUsed: number;
   // lastAnalysis exists on the backend but is snake_case (internal format).
   // Always use getAnalysis() for typed, camelCase analysis data.
   lastAnalysis: object | null;
