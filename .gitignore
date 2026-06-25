@@ -18,6 +18,7 @@ tournament.py
 
 .venv
 inference/.venv
+inference/__pycache__/
 
 # Editor directories and files
 .vscode/*
