@@ -127,9 +127,9 @@ class UTTTState:
 
 class UTTTNet(nn.Module):
     
-    def __init__(self, channels=128, num_res_blocks=10):
+    def __init__(self, channels=256, num_res_blocks=10, in_channels=7):
         super(UTTTNet, self).__init__()
-        self.conv1 = nn.Conv2d(4, channels, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv2d(in_channels, channels, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(channels)
         self.res_blocks = nn.ModuleList([self._make_res_block(channels) for _ in range(num_res_blocks)])
         self.policy_conv = nn.Conv2d(channels, 2, kernel_size=1)
@@ -215,7 +215,8 @@ class MCTS:
                     Qsa = self.Qsa.get(sa_key, 0.0)
                     Ps = self.Ps[state_key][idx]
                     Ns = self.Ns[state_key]
-                    Q = Qsa / (Nsa + 1e-8)
+                    # FPU: unvisited children start at the parent's value estimate
+                    Q = (Qsa / Nsa) if Nsa > 0 else self.Vs.get(state_key, 0.0)
                     U = self.c_puct * Ps * np.sqrt(Ns + 1e-8) / (Nsa + 1)
                     if Q + U > best_ucb:
                         best_ucb = Q + U
@@ -272,36 +273,85 @@ class MCTS:
         # convert to spatial 9x9
         board_spatial = MCTS._linear_to_spatial(board_flat)
         
-        # create channels - we use board_spatial for the checks so the channels align spatially
-        ch_own = (board_spatial == state.player).astype(np.float32)
-        ch_opp = (board_spatial == -state.player).astype(np.float32)
+        # channels 0-1: piece ownership (from to-move player's perspective)
+        ch_own  = (board_spatial == state.player).astype(np.float32)
+        ch_opp  = (board_spatial == -state.player).astype(np.float32)
+
+        # channel 2: whose turn it is (-1 or 1)
         ch_turn = np.full((9, 9), state.player, dtype=np.float32)
         
-        # create legal moves mask
+        # channel 3: legal moves mask
         legal_mask_flat = np.zeros(81, dtype=np.float32)
         for m, c in state.get_actions():
-            idx = m * 9 + c
-            legal_mask_flat[idx] = 1.0
+            legal_mask_flat[m * 9 + c] = 1.0
         legal_mask_spatial = MCTS._linear_to_spatial(legal_mask_flat)
-        # stack (4, 9, 9)
-        return np.stack([ch_own, ch_opp, ch_turn, legal_mask_spatial], axis=0)
+
+        # channels 4-6: explicit macro board state
+        # (lets the network understand the macro win state immediately at every layer)
+        #   ch_macro_own  — all 9 cells of each macro won by the to-move player = 1
+        #   ch_macro_opp  — all 9 cells of each macro won by the opponent = 1
+        #   ch_macro_draw — all 9 cells of each drawn macro = 1
+        macro_own_flat  = np.zeros(81, dtype=np.float32)
+        macro_opp_flat  = np.zeros(81, dtype=np.float32)
+        macro_draw_flat = np.zeros(81, dtype=np.float32)
+        for m in range(9):
+            v = state.macro[m]
+            base = m * 9
+            if v == state.player:
+                macro_own_flat[base:base + 9]  = 1.0
+            elif v == -state.player:
+                macro_opp_flat[base:base + 9]  = 1.0
+            elif v == 2:   # UTTTState.DRAW == 2
+                macro_draw_flat[base:base + 9] = 1.0
+        ch_macro_own  = MCTS._linear_to_spatial(macro_own_flat)
+        ch_macro_opp  = MCTS._linear_to_spatial(macro_opp_flat)
+        ch_macro_draw = MCTS._linear_to_spatial(macro_draw_flat)
+
+        # stack (7, 9, 9)
+        return np.stack(
+            [ch_own, ch_opp, ch_turn, legal_mask_spatial,
+             ch_macro_own, ch_macro_opp, ch_macro_draw],
+            axis=0
+        )
 
     def reset(self):
         self.Nsa.clear(); self.Ns.clear(); self.Qsa.clear(); self.Ps.clear(); self.Vs.clear()
 
 
 class SelfPlayBuffer:
-    def __init__(self, max_size=250000):
-        self.memory = deque(maxlen=max_size)
+    # circular ring buffer for self-play experience.
+
+    def __init__(self, max_size=500000):
+        self.max_size = max_size
+        self.memory: list = []
+        self.position = 0
+
     def push(self, sample):
-        self.memory.append(sample)
+        if len(self.memory) < self.max_size:
+            self.memory.append(sample)
+        else:
+            self.memory[self.position] = sample
+        self.position = (self.position + 1) % self.max_size
+
     def sample(self, batch_size):
-        if len(self.memory) < batch_size: batch_size = len(self.memory)
-        batch = random.sample(list(self.memory), batch_size)
-        states = np.array([item[0] for item in batch])
-        policies = np.array([item[1] for item in batch])
-        values = np.array([item[2] for item in batch]).reshape(-1, 1)
-        return states, policies, values
+        current_size = len(self.memory)
+        if current_size < batch_size:
+            batch_size = current_size
+        # sample without replacement to avoid duplicate samples in a batch
+        indices = np.random.choice(current_size, batch_size, replace=False)
+        batch = [self.memory[i] for i in indices]
+        states        = np.array([item[0] for item in batch])
+        policies      = np.array([item[1] for item in batch])
+        values        = np.array([item[2] for item in batch]).reshape(-1, 1)
+        search_values = np.array([item[3] for item in batch]).reshape(-1, 1)
+        return states, policies, values, search_values
+
+    def load_legacy(self, saved_memory):
+        items = list(saved_memory)
+        n = min(len(items), self.max_size)
+        self.memory = items[-n:]
+        self.position = len(self.memory) % self.max_size
+
     def __len__(self):
         return len(self.memory)
 
@@ -331,7 +381,9 @@ def play_game(nnet, device, num_sims):
         move_count += 1
 
     outcome = state.evaluate()
-    return [(item[0], item[1], outcome * (1 if i%2==0 else -1)) for i, item in enumerate(trajectory)]
+
+    return [(item[0], item[1], outcome * (1 if i%2==0 else -1), outcome * (1 if i%2==0 else -1))
+            for i, item in enumerate(trajectory)]
 
 
 class BatchMCTS:
@@ -351,7 +403,7 @@ class BatchMCTS:
 
     def search(self, states, noise=False):
         # hyperparameters for dirichlet noise
-        DIRICHLET_ALPHA = 0.3   
+        DIRICHLET_ALPHA = 0.5
         EPSILON = 0.25          # 25% noise, 75% neural net
 
         for _ in range(self.num_sims):
@@ -359,7 +411,6 @@ class BatchMCTS:
             paths = []
             valid_indices = []
 
-            # select
             for i, state in enumerate(states):
                 tree = self.trees[i]
                 current_state = state
@@ -390,7 +441,8 @@ class BatchMCTS:
                         Ps = tree['Ps'][state_key][idx]
                         Ns = tree['Ns'][state_key]
                         
-                        Q = Qsa / (Nsa + 1e-8)
+                        # FPU: unvisited children start at the parent's stored value (rather than 0)
+                        Q = (Qsa / Nsa) if Nsa > 0 else tree['Vs'].get(state_key, 0.0)
                         U = self.c_puct * Ps * np.sqrt(Ns + 1e-8) / (Nsa + 1)
                         
                         if Q + U > best_ucb:
@@ -430,7 +482,6 @@ class BatchMCTS:
                         leaf_key = leaf_state.to_key()
                         
                         # add dirichlet noise only to the root node
-                            # we are at the root if the path is empty (meaning we selected the root immediately)
                         is_root = (len(path) == 0)
                         
                         current_policy = policies[leaf_idx]
@@ -443,8 +494,7 @@ class BatchMCTS:
                             # generate noise
                             noise_vec = np.random.dirichlet([DIRICHLET_ALPHA] * len(legal_indices))
                             
-                            # mix noise into the legal slots of the policy
-                                # we normalize the existing policy subset first to be safe
+                            # 3 mix noise into the legal slots of the policy
                             policy_subset = current_policy[legal_indices]
                             if policy_subset.sum() > 0:
                                 policy_subset /= policy_subset.sum()
@@ -473,19 +523,28 @@ class BatchMCTS:
                     tree['Ns'][state_key] = tree['Ns'].get(state_key, 0) + 1
                     value = -value
 
-        # return policies
+        # return policies and the search-refined root value for each game
         final_policies = []
+        final_values = []
         for i, state in enumerate(states):
             tree = self.trees[i]
             root_key = state.to_key()
             counts = np.zeros(81)
             if state.is_terminal():
                 final_policies.append(counts)
+                final_values.append(0.0)
                 continue
+
+            q_sum = 0.0
+            visit_sum = 0
             for action in state.get_actions():
                 idx = action[0] * 9 + action[1]
                 counts[idx] = tree['Nsa'].get((root_key, idx), 0)
+                q_sum += tree['Qsa'].get((root_key, idx), 0.0)
+                visit_sum += tree['Nsa'].get((root_key, idx), 0)
+
             if counts.sum() > 0: counts /= counts.sum()
             final_policies.append(counts)
-            
-        return final_policies
+            final_values.append(q_sum / visit_sum if visit_sum > 0 else 0.0)
+
+        return final_policies, final_values

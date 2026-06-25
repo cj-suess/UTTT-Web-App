@@ -1,14 +1,8 @@
-"""
-UTTT inference service.
-
-Wraps the trained AlphaZero model and exposes a /move endpoint that returns
-not just the best move but the full MCTS readout needed for learning mode:
-visit counts, Q-values, policy priors, principal variation, value estimate.
-
-Run locally with:
-    uvicorn main:app --reload --port 8000
-"""
-
+# UTTT Inferene Service
+# wraps the trained model and exposes a /move endpoint that returns the best move and full MCTS readout
+#   visit counts, Q-values, policy priors, principal variation, value estimate
+# to run locally:
+#   uvicorn main:app --reload --port 8000
 import os
 import logging
 import time
@@ -25,38 +19,58 @@ from game_utils import MCTS, UTTTNet, UTTTState
 logging.basicConfig(level=logging.INFO, format="[inference] %(message)s")
 logger = logging.getLogger("inference")
 
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
-DEVICE = os.environ.get("DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
-MODEL_PATH = os.environ.get("MODEL_PATH", "models/playable-6.pth")
-CHANNELS = int(os.environ.get("CHANNELS", "128"))
-NUM_RES_BLOCKS = int(os.environ.get("NUM_RES_BLOCKS", "10"))
+# config
+DEVICE     = os.environ.get("DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
+MODEL_PATH = os.environ.get("MODEL_PATH", "models/playable-8-256-7.pth")
 
-# ---------------------------------------------------------------------------
-# Model loading (once, at startup)
-# ---------------------------------------------------------------------------
+# load model at startup
 print(f"[inference] Loading model from {MODEL_PATH} on {DEVICE}...")
-nnet = UTTTNet(channels=CHANNELS, num_res_blocks=NUM_RES_BLOCKS).to(DEVICE)
 _loaded = torch.load(MODEL_PATH, map_location=DEVICE, weights_only=False)
 
-# Accept either a full training checkpoint (dict with 'model_state_dict') or
-# a slim playable (raw state_dict, as produced by your export one-liner).
+# this will normalise to a plain state dict (from full checkpoint or slimmed down version)
 if isinstance(_loaded, dict) and "model_state_dict" in _loaded:
-    nnet.load_state_dict(_loaded["model_state_dict"])
+    _sd             = _loaded["model_state_dict"]
     MODEL_ITERATION = _loaded.get("iteration", None)
-else:
-    nnet.load_state_dict(_loaded)
+    _blocks         = _loaded.get("arch", {}).get("num_res_blocks", 10)
+elif isinstance(_loaded, dict) and "conv1.weight" in _loaded:
+    _sd             = _loaded
     MODEL_ITERATION = None
-nnet.eval()
-print(f"[inference] Model loaded (iteration: {MODEL_ITERATION if MODEL_ITERATION is not None else 'unknown'})")
+    _blocks         = 10
+else:
+    raise RuntimeError(f"Unrecognised checkpoint format in {MODEL_PATH}")
 
-# ---------------------------------------------------------------------------
-# App
-# ---------------------------------------------------------------------------
+# detect architecture from the weights
+_channels    = _sd["conv1.weight"].shape[0]
+_in_channels = _sd["conv1.weight"].shape[1]
+
+nnet = UTTTNet(channels=_channels, num_res_blocks=_blocks,
+               in_channels=_in_channels).to(DEVICE)
+nnet.load_state_dict(_sd)
+nnet.eval()
+
+# more stuff to handle models from older architectures
+if _in_channels == 4:
+    def _encode_state_4ch(state):
+        board_flat    = np.array(state.board, dtype=np.float32)
+        board_spatial = MCTS._linear_to_spatial(board_flat)
+        ch_own  = (board_spatial ==  state.player).astype(np.float32)
+        ch_opp  = (board_spatial == -state.player).astype(np.float32)
+        ch_turn = np.full((9, 9), state.player, dtype=np.float32)
+        mask    = np.zeros(81, dtype=np.float32)
+        for m, c in state.get_actions():
+            mask[m * 9 + c] = 1.0
+        return np.stack(
+            [ch_own, ch_opp, ch_turn, MCTS._linear_to_spatial(mask)], axis=0
+        )
+    MCTS._encode_state = staticmethod(_encode_state_4ch)
+
+print(f"[inference] Model loaded — {_channels}ch / {_in_channels}-input / "
+      f"iter {MODEL_ITERATION if MODEL_ITERATION is not None else 'unknown'}")
+
+
 app = FastAPI(title="UTTT Inference", version="0.1.0")
 
-# Permissive CORS for local dev. Tighten this for production.
+# permissive CORS for local dev (update later)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -65,11 +79,9 @@ app.add_middleware(
 )
 
 
-# ---------------------------------------------------------------------------
 # DTOs
-# ---------------------------------------------------------------------------
 class GameStateDTO(BaseModel):
-    """Client representation of a UTTT state."""
+    # client representation of a UTTT state
     board: List[int] = Field(..., min_length=81, max_length=81,
                              description="81 cells, macro-major order. 1=X, -1=O, 0=empty.")
     macro: List[int] = Field(..., min_length=9, max_length=9,
@@ -80,20 +92,21 @@ class GameStateDTO(BaseModel):
 
 
 class MoveAnalysis(BaseModel):
-    """Per-move breakdown the frontend uses to render the learning overlay."""
-    move: Tuple[int, int]       # (macro, cell), both 0-8
-    visits: int                 # MCTS visit count for this action at root
-    visit_share: float          # visits / total_root_simulations
-    q_value: float              # MCTS-derived expected value, in [-1, 1], from current player's POV
-    prior: float                # raw policy-head probability for this move
-    is_best: bool               # the move the agent would actually play
+    # per-move breakdown the frontend uses to render the learning overlay
+    move: Tuple[int, int]
+    visits: int
+    visit_share: float
+    q_value: float
+    prior: float
+    is_best: bool
 
 
 class MoveResponse(BaseModel):
     best_move: Tuple[int, int]
-    candidates: List[MoveAnalysis]   # all legal moves, sorted by visits desc
-    value_estimate: float            # value head's read on the current position, [-1, 1]
-    principal_variation: List[Tuple[int, int]]  # expected line going forward
+    candidates: List[MoveAnalysis]
+    value_estimate: float
+    search_value: float              # visit-weighted mean Q — search-refined estimate
+    principal_variation: List[Tuple[int, int]]
     sims_used: int
 
 
@@ -102,9 +115,7 @@ class MoveRequest(BaseModel):
     sims: int = Field(800, ge=1, le=10000, description="MCTS simulations per move.")
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+# helpers
 def state_from_dto(dto: GameStateDTO) -> UTTTState:
     return UTTTState(
         board=tuple(dto.board),
@@ -113,14 +124,10 @@ def state_from_dto(dto: GameStateDTO) -> UTTTState:
         next_micro=dto.next_micro,
     )
 
-
 def compute_principal_variation(
     mcts: MCTS, root_state: UTTTState, max_depth: int = 8
 ) -> List[Tuple[int, int]]:
-    """Walk down the most-visited child to produce an expected line.
-
-    Stops when we leave the explored part of the tree or hit a terminal state.
-    """
+    """Walk down the most-visited child to produce an expected line."""
     pv: List[Tuple[int, int]] = []
     state = root_state
     for _ in range(max_depth):
@@ -144,16 +151,16 @@ def compute_principal_variation(
     return pv
 
 
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
+# endpoints
 @app.get("/health")
 def health():
     return {
-        "status": "ok",
-        "device": DEVICE,
-        "model_path": MODEL_PATH,
-        "iteration": MODEL_ITERATION,
+        "status":      "ok",
+        "device":      DEVICE,
+        "model_path":  MODEL_PATH,
+        "iteration":   MODEL_ITERATION,
+        "channels":    _channels,
+        "in_channels": _in_channels,
     }
 
 
@@ -167,7 +174,7 @@ def get_move(req: MoveRequest):
 
     start = time.time()
 
-    # Fresh MCTS per request — never share search trees across users/games.
+    # fresh MCTS per request
     mcts = MCTS(nnet, num_sims=req.sims, c_puct=1.0, device=DEVICE)
     visit_probs = mcts.search(state)
 
@@ -176,28 +183,26 @@ def get_move(req: MoveRequest):
 
     root_key = state.to_key()
 
-    # Best move = argmax visit count (standard AlphaZero play-time choice).
-    best_idx = int(np.argmax(visit_probs))
+    # the best move is the one most visited
+    best_idx  = int(np.argmax(visit_probs))
     best_move = (best_idx // 9, best_idx % 9)
 
-    # Build per-move analysis for every legal move.
+    # build per-move analysis for every legal move
     total_visits = mcts.Ns.get(root_key, req.sims)
+    priors       = mcts.Ps.get(root_key, np.zeros(81))
     candidates: List[MoveAnalysis] = []
-    priors = mcts.Ps.get(root_key, np.zeros(81))
+
     for action in state.get_actions():
-        idx = action[0] * 9 + action[1]
+        idx    = action[0] * 9 + action[1]
         sa_key = (root_key, idx)
         visits = mcts.Nsa.get(sa_key, 0)
-        q_total = mcts.Qsa.get(sa_key, 0.0)
-        # Qsa at root is accumulated value from CURRENT player's POV
-        # (the value returned to the root before the per-level sign flip).
-        q_value = q_total / visits if visits > 0 else 0.0
+        q_sum  = mcts.Qsa.get(sa_key, 0.0)
         candidates.append(
             MoveAnalysis(
                 move=action,
                 visits=visits,
                 visit_share=visits / max(total_visits, 1),
-                q_value=float(q_value),
+                q_value=float(q_sum / visits) if visits > 0 else 0.0,
                 prior=float(priors[idx]),
                 is_best=(action == best_move),
             )
@@ -208,12 +213,17 @@ def get_move(req: MoveRequest):
         best_move=best_move,
         candidates=candidates,
         value_estimate=float(mcts.Vs.get(root_key, 0.0)),
+        search_value=float(
+            sum(mcts.Qsa.get((root_key, a[0]*9+a[1]), 0.0) for a in state.get_actions()) /
+            max(sum(mcts.Nsa.get((root_key, a[0]*9+a[1]), 0) for a in state.get_actions()), 1)
+        ),
         principal_variation=compute_principal_variation(mcts, state),
         sims_used=req.sims,
     )
 
     logger.info(f"Best move: macro={result.best_move[0]} cell={result.best_move[1]}")
-    logger.info(f"Value estimate: {result.value_estimate:.3f}  Win probability: {(result.value_estimate + 1) / 2:.1%}")
+    logger.info(f"Value estimate: {result.value_estimate:.3f}  "
+                f"Win probability: {(result.value_estimate + 1) / 2:.1%}")
     logger.info(f"Principal variation: {result.principal_variation}")
     logger.info("Top candidates:")
     for c in result.candidates[:5]:
