@@ -13,6 +13,9 @@ dist-ssr
 *.local
 old_game_utils
 
+inspect_model.py
+tournament.py
+
 .venv
 inference/.venv
 
