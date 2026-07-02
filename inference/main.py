@@ -49,11 +49,14 @@ def _load_model(path: str) -> dict:
     else:
         raise RuntimeError(f"Unrecognised checkpoint format in {path}")
 
-    channels    = sd["conv1.weight"].shape[0]
-    in_channels = sd["conv1.weight"].shape[1]
+    channels       = sd["conv1.weight"].shape[0]
+    in_channels    = sd["conv1.weight"].shape[1]
+    policy_head_ch = sd["policy_conv.weight"].shape[0]
+    use_se         = "res_blocks.0.conv1.weight" in sd
 
     net = UTTTNet(channels=channels, num_res_blocks=blocks,
-                  in_channels=in_channels).to(DEVICE)
+                  in_channels=in_channels, policy_head_ch=policy_head_ch,
+                  se_blocks=use_se).to(DEVICE)
     net.load_state_dict(sd)
     net.eval()
 
