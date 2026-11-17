@@ -44,8 +44,11 @@ else
   ACTIVATE=""
 fi
 
+# Clear PYTHONPATH and ignore ~/.local user packages so the venv's packages
+# win (e.g. `module load python/anaconda` sets PYTHONPATH to anaconda's
+# site-packages, which would otherwise shadow the venv).
 tmux send-keys -t "${SESSION}:inference" \
-  "cd $ROOT/inference && ${ACTIVATE}uvicorn main:app --reload --port 8000" C-m
+  "cd $ROOT/inference && unset PYTHONPATH && export PYTHONNOUSERSITE=1 && ${ACTIVATE}uvicorn main:app --reload --port 8000" C-m
 
 # ── Window 2: NestJS backend ─────────────────────────────────────────────────
 tmux new-window -t $SESSION -n "backend"
