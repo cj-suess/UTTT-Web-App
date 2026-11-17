@@ -47,3 +47,6 @@ NOTES.md
 # environment files
 .env
 *.envinference/models/playable-10-*.pth
+
+# TypeScript incremental build info
+*.tsbuildinfo
