@@ -15,6 +15,7 @@ var GamesController_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GamesController = void 0;
 const common_1 = require("@nestjs/common");
+const throttler_1 = require("@nestjs/throttler");
 const apply_move_dto_1 = require("./apply-move.dto");
 const games_service_1 = require("./games.service");
 const create_game_dto_1 = require("./create-game.dto");
@@ -70,6 +71,15 @@ let GamesController = GamesController_1 = class GamesController {
      */
     getAnalysis(id) {
         return this.gamesService.getAnalysis(id);
+    }
+    /**
+     * GET /games/:id/x-analysis — run a fresh MCTS search from X's perspective
+     * (without applying the move) and return the analysis for the hint data panel.
+     * Optional ?sims=N controls search depth.
+     */
+    getXAnalysis(id, simsParam) {
+        const sims = simsParam !== undefined ? parseInt(simsParam, 10) : 800;
+        return this.gamesService.getXAnalysis(id, sims);
     }
     hintStream(id) {
         return new rxjs_1.Observable(subscriber => {
@@ -128,8 +138,17 @@ __decorate([
     __metadata("design:returntype", Object)
 ], GamesController.prototype, "getAnalysis", null);
 __decorate([
+    (0, common_1.Get)(':id/x-analysis'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Query)('sims')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], GamesController.prototype, "getXAnalysis", null);
+__decorate([
     (0, common_1.Get)(':id/hint'),
     (0, common_2.Sse)(),
+    (0, throttler_1.Throttle)({ default: { limit: 10, ttl: 60_000 } }),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),

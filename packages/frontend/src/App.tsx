@@ -2,9 +2,11 @@ import { evaluate, isTerminal } from '@uttt/shared'
 import { Board } from './components/Board'
 import { useGame } from './hooks/useGame'
 import styles from './App.module.css'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { HintPanel } from './components/HintPanel'
-import type { Difficulty } from './api/client'
+import { GameDataPanel } from './components/GameDataPanel'
+import type { Difficulty, GameAnalysis } from './api/client'
+import { api } from './api/client'
 
 const DIFFICULTY_LABELS: Record<Difficulty, string> = {
   easy:   'EASY',
@@ -26,6 +28,26 @@ export default function App() {
   const [showConfirm, setConfirm] = useState(false)
   const [hintedMove, setHintedMove] = useState<[number, number] | null>(null)
   const [hintKey, setHintKey] = useState(0)
+  const [gameDataOpen, setGameDataOpen] = useState(false)
+  const [winProbHistory, setWinProbHistory] = useState<number[]>([])
+  const [xAnalysis, setXAnalysis] = useState<GameAnalysis | null>(null)
+  const prevGameId = useRef<string | undefined>()
+
+  useEffect(() => {
+    if (game?.id !== prevGameId.current) {
+      prevGameId.current = game?.id
+      setWinProbHistory([])
+      setGameDataOpen(false)
+      setXAnalysis(null)
+    }
+  }, [game?.id])
+
+  useEffect(() => {
+    if (analysis) {
+      setWinProbHistory(h => [...h, 1 - analysis.winProbability])
+      setXAnalysis(null)  // stale after AI makes a new move
+    }
+  }, [analysis])
 
   function statusText(): string {
     if (error) return error
@@ -176,6 +198,16 @@ export default function App() {
         )}
       </header>
       <main className={styles.content}>
+        {gameDataOpen && (
+          <div className={styles.gameDataPanel}>
+            <GameDataPanel
+              analysis={xAnalysis}
+              gameState={game?.state ?? null}
+              winProbHistory={winProbHistory}
+              onClose={() => setGameDataOpen(false)}
+            />
+          </div>
+        )}
         <div className={styles.boardSection}>
           {renderBoardArea()}
         </div>
@@ -187,9 +219,14 @@ export default function App() {
               analysis={analysis}
               moveCount={game.state.board.filter(c => c !== 0).length}
               hintsUsed={hintsUsed}
-              onHintStart={move => {
+              onHintStart={(move, sims) => {
                 setHintedMove(move)
                 setHintKey(k => k + 1)
+                setGameDataOpen(true)
+                setXAnalysis(null)
+                if (game) {
+                  api.getXAnalysis(game.id, sims).then(setXAnalysis).catch(console.error)
+                }
               }}
               onHintClear={() => setHintedMove(null)}
               onHintUsed={recordHintUsed}

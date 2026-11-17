@@ -197,6 +197,16 @@ export class GamesService {
     return this.buildAnalysis(game.lastAnalysis, game.state);
   }
 
+  async getXAnalysis(id: string, sims = 800): Promise<GameAnalysis> {
+    const game = this.findById(id);
+    if (isTerminal(game.state))
+      throw new BadRequestException('Game is already over');
+    if (game.state.player !== 1)
+      throw new BadRequestException('Not X\'s turn');
+    const raw = await this.inferenceService.getMove(game.state, sims, game.difficulty);
+    return this.buildAnalysis(raw, game.state, true);
+  }
+
   getHintContext(id: string): { state: GameState; analysis: GameAnalysis } {
     const game = this.findById(id);
     if (!game.lastAnalysis)
@@ -224,8 +234,9 @@ export class GamesService {
   private buildAnalysis(
     raw: InferenceMoveResponse,
     state: GameState,
+    forXPlayer = false,
   ): GameAnalysis {
-    const candidates = raw.candidates.map((c) => ({
+    const rawCandidates = raw.candidates.map((c) => ({
       move: c.move as [number, number],
       visits: c.visits,
       visitShare: c.visit_share,
@@ -233,6 +244,14 @@ export class GamesService {
       prior: c.prior,
       isBest: c.is_best,
     }));
+
+    // Raw priors are the network's softmax over all 81 cells, not masked to
+    // legal moves, so each legal-move prior is tiny. Renormalize within the
+    // candidate set so priors sum to 1.0 and are human-readable as percentages.
+    const totalPrior = rawCandidates.reduce((sum, c) => sum + c.prior, 0);
+    const candidates = totalPrior > 0
+      ? rawCandidates.map(c => ({ ...c, prior: c.prior / totalPrior }))
+      : rawCandidates;
 
     const best             = candidates.find((c) => c.isBest);
     const networkValue     = raw.value_estimate;
@@ -242,7 +261,11 @@ export class GamesService {
     const winProbability   = (networkValue + 1) / 2;
     const topMoveVisitShare = best?.visitShare ?? 0;
     const priorOnBestMove  = best?.prior ?? 0;
-    const xWinPct          = Math.round((1 - winProbability) * 100);
+    // When called for X's turn, value is from X's POV: high = X winning.
+    // When called after O's move (normal case), value is from O's POV: invert.
+    const xWinPct = forXPlayer
+      ? Math.round(winProbability * 100)
+      : Math.round((1 - winProbability) * 100);
 
     const positionType = this.classifyPosition(
       xWinPct,
@@ -252,8 +275,11 @@ export class GamesService {
     );
 
     const pv = raw.principal_variation as [number, number][];
-    const recommendedMove: [number, number] | null =
-      pv.length >= 2 ? pv[1] : null;
+    // forXPlayer: PV[0] is X's recommended move (root player).
+    // Normal case: PV[0] is O's move already played; PV[1] is X's response.
+    const recommendedMove: [number, number] | null = forXPlayer
+      ? (pv.length >= 1 ? pv[0] : null)
+      : (pv.length >= 2 ? pv[1] : null);
 
     const macroThreats       = this.computeMacroThreats(state, recommendedMove);
     const moveStrategy       = this.detectMoveStrategy(state, recommendedMove, macroThreats.xWinsMicroBoard);

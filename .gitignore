@@ -11,14 +11,23 @@ node_modules
 dist
 dist-ssr
 *.local
-old_game_utils
 
 inspect_model.py
 tournament.py
+trainer.py
+worker.py
+game_utils_old.py
+
+architectures.md
+resume.txt
+training_improvements.md
 
 .venv
 inference/.venv
 inference/__pycache__/
+inference/bash_scripts
+inference/training_files
+inference/distributed_files
 
 # Editor directories and files
 .vscode/*
@@ -37,4 +46,4 @@ NOTES.md
 
 # environment files
 .env
-*.env
+*.envinference/models/playable-10-*.pth

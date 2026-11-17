@@ -42,12 +42,20 @@ def _load_model(path: str) -> dict:
     loaded = torch.load(path, map_location=DEVICE, weights_only=False)
     if isinstance(loaded, dict) and "model_state_dict" in loaded:
         sd     = loaded["model_state_dict"]
-        blocks = loaded.get("arch", {}).get("num_res_blocks", 10)
+        blocks = loaded.get("arch", {}).get("num_res_blocks", None)
+    elif isinstance(loaded, dict) and any(k.startswith("_orig_mod.") for k in loaded):
+        # torch.compile() wraps parameters with _orig_mod. prefix
+        sd     = {k[len("_orig_mod."):]: v for k, v in loaded.items()}
+        blocks = None
     elif isinstance(loaded, dict) and "conv1.weight" in loaded:
         sd     = loaded
-        blocks = 10
+        blocks = None
     else:
         raise RuntimeError(f"Unrecognised checkpoint format in {path}")
+
+    if blocks is None:
+        idxs   = [int(k.split(".")[1]) for k in sd if k.startswith("res_blocks.")]
+        blocks = max(idxs) + 1 if idxs else 10
 
     channels       = sd["conv1.weight"].shape[0]
     in_channels    = sd["conv1.weight"].shape[1]

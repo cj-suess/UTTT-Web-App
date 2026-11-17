@@ -73,6 +73,20 @@ export class GamesController {
     return this.gamesService.getAnalysis(id);
   }
 
+  /**
+   * GET /games/:id/x-analysis — run a fresh MCTS search from X's perspective
+   * (without applying the move) and return the analysis for the hint data panel.
+   * Optional ?sims=N controls search depth.
+   */
+  @Get(':id/x-analysis')
+  getXAnalysis(
+    @Param('id') id: string,
+    @Query('sims') simsParam?: string,
+  ): Promise<GameAnalysis> {
+    const sims = simsParam !== undefined ? parseInt(simsParam, 10) : 800;
+    return this.gamesService.getXAnalysis(id, sims);
+  }
+
   @Get(':id/hint')
   @Sse()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })

@@ -8,6 +8,8 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
+const core_1 = require("@nestjs/core");
+const throttler_1 = require("@nestjs/throttler");
 const app_controller_1 = require("./app.controller");
 const games_module_1 = require("./games/games.module");
 const config_1 = require("@nestjs/config");
@@ -18,10 +20,11 @@ exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
             config_1.ConfigModule.forRoot({ isGlobal: true }),
-            games_module_1.GamesModule
+            throttler_1.ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
+            games_module_1.GamesModule,
         ],
         controllers: [app_controller_1.AppController],
-        providers: [],
+        providers: [{ provide: core_1.APP_GUARD, useClass: throttler_1.ThrottlerGuard }],
     })
 ], AppModule);
 //# sourceMappingURL=app.module.js.map

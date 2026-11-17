@@ -39,5 +39,11 @@ export declare class GamesController {
      * Returns 404 if the game does not exist.
      */
     getAnalysis(id: string): GameAnalysis;
+    /**
+     * GET /games/:id/x-analysis — run a fresh MCTS search from X's perspective
+     * (without applying the move) and return the analysis for the hint data panel.
+     * Optional ?sims=N controls search depth.
+     */
+    getXAnalysis(id: string, simsParam?: string): Promise<GameAnalysis>;
     hintStream(id: string): Observable<MessageEvent>;
 }

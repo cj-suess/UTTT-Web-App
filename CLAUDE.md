@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-Ultimate Tic-Tac-Toe played against a trained AlphaZero-style model. Includes a "learning mode" where Claude Haiku explains the best move and why, streaming via SSE.
+Ultimate Tic-Tac-Toe played against a trained AlphaZero-style model. Includes a "learning mode" where Claude explains the best move and why, streaming via SSE.
 
 ## Development commands
 

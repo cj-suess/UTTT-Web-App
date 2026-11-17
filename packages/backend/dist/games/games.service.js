@@ -81,6 +81,15 @@ let GamesService = GamesService_1 = class GamesService {
             throw new common_1.BadRequestException('No analysis available yet — the AI needs to make at least one move first.');
         return this.buildAnalysis(game.lastAnalysis, game.state);
     }
+    async getXAnalysis(id, sims = 800) {
+        const game = this.findById(id);
+        if ((0, shared_1.isTerminal)(game.state))
+            throw new common_1.BadRequestException('Game is already over');
+        if (game.state.player !== 1)
+            throw new common_1.BadRequestException('Not X\'s turn');
+        const raw = await this.inferenceService.getMove(game.state, sims, game.difficulty);
+        return this.buildAnalysis(raw, game.state, true);
+    }
     getHintContext(id) {
         const game = this.findById(id);
         if (!game.lastAnalysis)
@@ -101,8 +110,8 @@ let GamesService = GamesService_1 = class GamesService {
      * GameAnalysis.  Both getAnalysis and getHintContext call this so that
      * every consumer always receives the complete enriched struct.
      */
-    buildAnalysis(raw, state) {
-        const candidates = raw.candidates.map((c) => ({
+    buildAnalysis(raw, state, forXPlayer = false) {
+        const rawCandidates = raw.candidates.map((c) => ({
             move: c.move,
             visits: c.visits,
             visitShare: c.visit_share,
@@ -110,6 +119,13 @@ let GamesService = GamesService_1 = class GamesService {
             prior: c.prior,
             isBest: c.is_best,
         }));
+        // Raw priors are the network's softmax over all 81 cells, not masked to
+        // legal moves, so each legal-move prior is tiny. Renormalize within the
+        // candidate set so priors sum to 1.0 and are human-readable as percentages.
+        const totalPrior = rawCandidates.reduce((sum, c) => sum + c.prior, 0);
+        const candidates = totalPrior > 0
+            ? rawCandidates.map(c => ({ ...c, prior: c.prior / totalPrior }))
+            : rawCandidates;
         const best = candidates.find((c) => c.isBest);
         const networkValue = raw.value_estimate;
         // search_value is optional for backward compatibility with older inference
@@ -118,10 +134,18 @@ let GamesService = GamesService_1 = class GamesService {
         const winProbability = (networkValue + 1) / 2;
         const topMoveVisitShare = best?.visitShare ?? 0;
         const priorOnBestMove = best?.prior ?? 0;
-        const xWinPct = Math.round((1 - winProbability) * 100);
+        // When called for X's turn, value is from X's POV: high = X winning.
+        // When called after O's move (normal case), value is from O's POV: invert.
+        const xWinPct = forXPlayer
+            ? Math.round(winProbability * 100)
+            : Math.round((1 - winProbability) * 100);
         const positionType = this.classifyPosition(xWinPct, topMoveVisitShare, networkValue, searchValue);
         const pv = raw.principal_variation;
-        const recommendedMove = pv.length >= 2 ? pv[1] : null;
+        // forXPlayer: PV[0] is X's recommended move (root player).
+        // Normal case: PV[0] is O's move already played; PV[1] is X's response.
+        const recommendedMove = forXPlayer
+            ? (pv.length >= 1 ? pv[0] : null)
+            : (pv.length >= 2 ? pv[1] : null);
         const macroThreats = this.computeMacroThreats(state, recommendedMove);
         const moveStrategy = this.detectMoveStrategy(state, recommendedMove, macroThreats.xWinsMicroBoard);
         const constraintAnalysis = this.detectConstraintAnalysis(state, recommendedMove);

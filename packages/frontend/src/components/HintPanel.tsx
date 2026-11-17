@@ -3,14 +3,27 @@ import { HINT_LIMIT } from '@uttt/shared'
 import type { GameAnalysis } from '../api/client'
 import styles from './HintPanel.module.css'
 
+// Log scale: slider pos 0-100 → sims 1-5000
+const MIN_POS = 0
+const MAX_POS = 100
+const DEFAULT_POS = 79  // → ~837 sims (≈800)
+
+function sliderToSims(pos: number): number {
+  return Math.max(1, Math.round(Math.exp(pos / 100 * Math.log(5000))))
+}
+
+function simsToSlider(sims: number): number {
+  return Math.round(Math.log(Math.max(1, sims)) / Math.log(5000) * 100)
+}
+
 interface HintPanelProps {
   gameId: string
   isHumanTurn: boolean
   analysis: GameAnalysis | null
   moveCount: number
   hintsUsed: number
-  /** Called immediately when GET HINT is clicked with the recommended [macro, cell]. */
-  onHintStart?: (move: [number, number]) => void
+  /** Called immediately when GET HINT is clicked with the recommended [macro, cell] and sims count. */
+  onHintStart?: (move: [number, number], sims: number) => void
   /** Called when the hint is cleared (move made or new game). */
   onHintClear?: () => void
   /** Called when a hint is successfully streamed. */
@@ -30,8 +43,11 @@ export function HintPanel({
   const [hint, setHint] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sliderPos, setSliderPos] = useState(DEFAULT_POS)
   const esRef = useRef<EventSource | null>(null)
   const hasReceivedContent = useRef(false)
+
+  const sims = sliderToSims(sliderPos)
 
   // Clear hint and board highlight whenever a move is made.
   useEffect(() => {
@@ -56,11 +72,9 @@ export function HintPanel({
   function getHint() {
     if (isStreaming || !analysis) return
 
-    // Notify parent immediately so the board can start the flash animation
-    // before the first token arrives.
     const pv = analysis.principalVariation
     if (pv.length >= 2) {
-      onHintStart?.(pv[1] as [number, number])
+      onHintStart?.(pv[1] as [number, number], sims)
     }
 
     setHint('')
@@ -111,6 +125,20 @@ export function HintPanel({
         >
           {isStreaming ? 'THINKING...' : 'GET HINT'}
         </button>
+      </div>
+
+      <div className={styles.simsRow}>
+        <span className={styles.simsLabel}>ANALYSIS DEPTH</span>
+        <span className={styles.simsValue}>{sims.toLocaleString()}</span>
+        <input
+          type="range"
+          className={styles.simsSlider}
+          min={MIN_POS}
+          max={MAX_POS}
+          step={1}
+          value={sliderPos}
+          onChange={e => setSliderPos(Number(e.target.value))}
+        />
       </div>
 
       <div className={styles.content}>

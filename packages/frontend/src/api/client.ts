@@ -64,7 +64,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 // ─── Endpoints ───────────────────────────────────────────────────────────────
 
-const AI_SIMS = 100;
+const AI_SIMS = 800;
 
 export const api = {
   /** POST /games — create a new game. */
@@ -94,4 +94,8 @@ export const api = {
   /** GET /games/:id/analysis — get camelCase MCTS analysis for the last AI move. */
   getAnalysis: (id: string) =>
     request<GameAnalysis>(`/games/${id}/analysis`),
+
+  /** GET /games/:id/x-analysis — run fresh MCTS from X's perspective for the hint panel. */
+  getXAnalysis: (id: string, sims = 800) =>
+    request<GameAnalysis>(`/games/${id}/x-analysis?sims=${sims}`),
 };

@@ -85,6 +85,7 @@ export declare class GamesService {
     applyMove(id: string, move: Move): StoredGame;
     applyAiMove(id: string, sims?: number): Promise<StoredGame>;
     getAnalysis(id: string): GameAnalysis;
+    getXAnalysis(id: string, sims?: number): Promise<GameAnalysis>;
     getHintContext(id: string): {
         state: GameState;
         analysis: GameAnalysis;
