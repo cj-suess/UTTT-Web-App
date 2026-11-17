@@ -10,10 +10,14 @@ export default defineConfig({
     include: ['@uttt/shared'],
   },
   server: {
+    // Explicit IPv4 loopback: plain 'localhost' made Vite bind only to ::1,
+    // which SSH / VS Code port forwarding to 127.0.0.1 can't reach.
+    host: '127.0.0.1',
     port: 5173,
+    strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://127.0.0.1:3000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
